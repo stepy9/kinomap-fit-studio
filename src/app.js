@@ -39,7 +39,7 @@ function setLanguage(language, persist = true) {
   state.language = language === "en" ? "en" : "cs";
   document.documentElement.lang = state.language;
   elements.languageCode.textContent = state.language.toUpperCase();
-  elements.languageFlag.src = state.language === "en" ? "/flags/gb.svg" : "/flags/cz.svg";
+  elements.languageFlag.src = state.language === "en" ? "./flags/gb.svg" : "./flags/cz.svg";
   for (const option of elements.languageMenu.querySelectorAll("[data-language]")) {
     option.setAttribute("aria-selected", String(option.dataset.language === state.language));
   }
@@ -582,3 +582,8 @@ setTheme(savedTheme(), false);
 setZone(systemZone());
 setLanguage(savedLanguage(), false);
 render();
+
+// Installable and offline in the built app; the dev server stays uncached.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js").catch(() => {});
+}

@@ -1,0 +1,13 @@
+{
+  "name": "Kinomap FIT Studio",
+  "short_name": "Kinomap FIT",
+  "description": "Turns Kinomap workouts into FIT files for Garmin Connect, optionally merged with heart rate from your watch.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#060a12",
+  "theme_color": "#0b1220",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

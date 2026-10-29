@@ -5,12 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0b1220" />
     <title>Kinomap FIT Studio</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="manifest" href="./manifest.webmanifest" />
   </head>
   <body>
     <header class="topbar">
       <div class="topbar-inner">
-        <a class="brand" href="/" aria-label="Kinomap FIT Studio">
+        <a class="brand" href="./" aria-label="Kinomap FIT Studio">
           <span class="brand-mark" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="M3 15c2.5 0 2.5-6 5-6s2.5 6 5 6 2.5-6 5-6 2.5 3 3 3"/></svg>
           </span>
@@ -21,18 +22,18 @@
           <div class="language-control" id="languageControl">
             <span class="visually-hidden" data-i18n="language">Jazyk</span>
             <button id="languageButton" class="language-button" type="button" aria-label="Jazyk" data-i18n-aria="language" aria-haspopup="listbox" aria-expanded="false" aria-controls="languageMenu">
-              <img id="languageFlag" class="language-flag" src="/flags/cz.svg" alt="" aria-hidden="true" />
+              <img id="languageFlag" class="language-flag" src="./flags/cz.svg" alt="" aria-hidden="true" />
               <span id="languageCode">CZ</span>
               <span class="language-chevron" aria-hidden="true"></span>
             </button>
             <div id="languageMenu" class="language-menu" role="listbox" aria-label="Jazyk" data-i18n-aria="language" hidden>
               <button class="language-option" type="button" role="option" data-language="cs" aria-selected="true">
-                <img src="/flags/cz.svg" alt="" aria-hidden="true" />
+                <img src="./flags/cz.svg" alt="" aria-hidden="true" />
                 <span class="language-option-code">CZ</span>
                 <span class="language-option-name" data-i18n="czech">Čeština</span>
               </button>
               <button class="language-option" type="button" role="option" data-language="en" aria-selected="false">
-                <img src="/flags/gb.svg" alt="" aria-hidden="true" />
+                <img src="./flags/gb.svg" alt="" aria-hidden="true" />
                 <span class="language-option-code">EN</span>
                 <span class="language-option-name" data-i18n="english">English</span>
               </button>
