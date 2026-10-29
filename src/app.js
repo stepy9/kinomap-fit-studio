@@ -162,7 +162,7 @@ function setTheme(theme, persist = true) {
   document.documentElement.dataset.theme = isDark ? "dark" : "light";
   elements.lightThemeButton.setAttribute("aria-pressed", String(!isDark));
   elements.darkThemeButton.setAttribute("aria-pressed", String(isDark));
-  document.querySelector('meta[name="theme-color"]').content = isDark ? "#111a16" : "#f2f4ee";
+  document.querySelector('meta[name="theme-color"]').content = isDark ? "#060a12" : "#0b1220";
   if (persist) {
     try {
       localStorage.setItem("kinomap-fit-theme", isDark ? "dark" : "light");
@@ -403,7 +403,7 @@ function drawChart() {
       : { key: "power", title: t("powerLane"), unit: "W", min: 0, max: 400 },
     { key: "cadence", title: t("cadenceLane"), unit: state.kinomap?.sport === "cycling" ? "rpm" : "spm", min: 0, max: cadenceMax },
   ];
-  const left = 43;
+  const left = 56;
   const right = 10;
   const top = 7;
   const bottom = 5;
@@ -411,9 +411,9 @@ function drawChart() {
   const laneHeight = (height - top - bottom - laneGap * 2) / 3;
   const plotWidth = width - left - right;
   const span = Math.max(1, sources.endMs - sources.startMs);
-  const colorKinomap = "#e87943";
-  const colorFit = "#36a77d";
   const theme = getComputedStyle(document.documentElement);
+  const colorKinomap = theme.getPropertyValue("--series-source").trim();
+  const colorFit = theme.getPropertyValue("--series-watch").trim();
   const gridColor = theme.getPropertyValue("--chart-grid").trim();
   const labelColor = theme.getPropertyValue("--chart-label").trim();
   const subtleColor = theme.getPropertyValue("--chart-subtle").trim();
@@ -441,15 +441,15 @@ function drawChart() {
       context.stroke();
     }
     context.fillStyle = labelColor;
-    context.font = "9px Cascadia Code, Consolas, monospace";
-    context.fillText(lane.title, 1, laneTop + 11);
+    context.font = "600 11px Inter, Segoe UI, system-ui, sans-serif";
+    context.fillText(lane.title, 0, laneTop + 12);
     context.fillStyle = subtleColor;
-    context.font = "8px Cascadia Code, Consolas, monospace";
-    context.fillText(lane.unit, 2, laneTop + 23);
+    context.font = "10px Inter, Segoe UI, system-ui, sans-serif";
+    context.fillText(lane.unit, 0, laneTop + 26);
 
     const drawSeries = (records, color) => {
       context.strokeStyle = color;
-      context.lineWidth = 1.7;
+      context.lineWidth = 2;
       context.lineJoin = "round";
       context.lineCap = "round";
       context.beginPath();
