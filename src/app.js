@@ -1,6 +1,7 @@
 import "./styles.css";
 import { buildWorkout, decodeGarminFit, defaultLapDistance, estimateOffset, lapDistancePresets, parseKinomap } from "./core.js";
 import { buildBatchWorkout, planBatch } from "./batch.js";
+import { checkWorkout } from "./checks.js";
 import { collectDirectoryFiles, fitFileName, titleFromKinomapFileName } from "./files.js";
 import { renderBatchTabs } from "./ui/batch.js";
 import { drawChart, setupChartTrim } from "./ui/chart.js";
@@ -320,6 +321,26 @@ function updateContext() {
     : files;
 }
 
+function renderChecks() {
+  // The offset estimate only speaks for the alignment while the offset still holds its value.
+  const estimate = state.estimate && Number(elements.offset.value) === state.estimate.offsetSeconds ? state.estimate : null;
+  const trimmed = Number(elements.trimStart.value) > 0 || Number(elements.trimEnd.value) > 0;
+  const issues = checkWorkout(state.result, { kinomap: state.kinomap, estimate, trimmed });
+  const list = byId("checksList");
+  list.replaceChildren(...issues.map((issue) => {
+    const item = document.createElement("li");
+    item.className = `check is-${issue.severity}`;
+    item.textContent = t(issue.code, issue.values);
+    return item;
+  }));
+  list.hidden = !issues.length;
+  const active = activeBatchItem();
+  if (active && JSON.stringify(active.issues) !== JSON.stringify(issues)) {
+    active.issues = issues;
+    renderBatch();
+  }
+}
+
 function render() {
   updateModeButtons();
   updateFileRows();
@@ -329,6 +350,7 @@ function render() {
   elements.liveState.classList.remove("is-ready");
   elements.liveState.lastChild.textContent = t("waiting");
   resetSummary();
+  byId("checksList").hidden = true;
 
   if (state.error) {
     setNotice(t(state.error.key, { message: translateMessage(state.error.message) }), "error");
@@ -355,6 +377,7 @@ function render() {
       );
       elements.lapNote.textContent = state.result.lapDistance > 0 ? t("lapCount", { count: state.result.laps.length }) : "";
       renderSummary(state.result.summary, state.result.startMs, state.result.sport);
+      renderChecks();
       elements.export.disabled = false;
       elements.liveState.classList.add("is-ready");
       elements.liveState.lastChild.textContent = t("ready");

@@ -17,8 +17,11 @@ function statusFor(item) {
   if (item.status === "failed") return ["is-error", t("batchFailed")];
   if (item.error) return ["is-error", t("batchError")];
   if (item.needsManualStart && !item.settings?.manualStart) return ["is-warning", t("batchNeedsDate")];
+  const warnings = (item.issues ?? []).filter((issue) => issue.severity === "warning").length;
+  const mode = item.fitFile ? t("batchMerge") : t("batchConvert");
+  if (warnings) return ["is-warning", `${item.exported ? t("batchExported") : mode} · ⚠ ${warnings}`];
   if (item.exported) return ["is-done", t("batchExported")];
-  return ["", item.fitFile ? t("batchMerge") : t("batchConvert")];
+  return ["", mode];
 }
 
 export function renderBatchTabs({ onSelect, onToggle }) {

@@ -1,5 +1,6 @@
 // Plans a folder of Kinomap recordings as separate activities, each paired with its own watch FIT when one overlaps it.
 import { buildWorkout, decodeGarminFit, estimateOffset, parseKinomap } from "./core.js";
+import { checkWorkout } from "./checks.js";
 import { titleFromKinomapFileName } from "./files.js";
 
 // A watch recording counts as the same activity when it overlaps the Kinomap one, allowing this much clock skew.
@@ -60,6 +61,12 @@ export async function planBatch(files, { timeZone = "Europe/Prague", fallbackTit
         fit: watch?.fit ?? null,
         exported: nearby.some((candidate) => candidate.exported),
       });
+      // Check the default export up front so problem activities stand out before their tab is opened.
+      if (!item.needsManualStart) {
+        const estimate = item.fit ? estimateOffset(kinomap, item.fit) : null;
+        const workout = buildBatchWorkout(item, { offsetSeconds: estimate?.offsetSeconds ?? 0 });
+        item.issues = checkWorkout(workout, { kinomap, estimate });
+      }
     } catch (error) {
       item.error = error.message;
     }
