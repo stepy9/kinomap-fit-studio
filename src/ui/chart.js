@@ -8,6 +8,15 @@ let layout = null;
 const hiddenSeries = new Set();
 // Moment under the mouse pointer, shown as a guide line with both recordings' values.
 let hoverMs = null;
+// The trim handles appear only while trimming; a trim already set stays shaded either way.
+let trimMode = false;
+
+export function setTrimMode(on) {
+  trimMode = on;
+  drawChart();
+}
+
+export const isTrimMode = () => trimMode;
 
 function chartSources() {
   const kinomap = state.kinomap;
@@ -52,6 +61,7 @@ function drawTrim(context, { left, top, plotWidth, plotBottom, startMs, span }, 
   context.fillStyle = colors.shade;
   if (startX > left) context.fillRect(left, top, startX - left, plotBottom - top);
   if (endX < left + plotWidth) context.fillRect(endX, top, left + plotWidth - endX, plotBottom - top);
+  if (!trimMode) return;
   for (const [x, trimmedMs, align] of [[startX, trim.trimStartMs, "left"], [endX, trim.trimEndMs, "right"]]) {
     context.strokeStyle = colors.handle;
     context.lineWidth = 2;
@@ -259,7 +269,7 @@ function drawHover(context, lineColor) {
 }
 
 function handleAt(clientX) {
-  if (!layout) return null;
+  if (!layout || !trimMode) return null;
   const rect = elements.chart.getBoundingClientRect();
   const x = clientX - rect.left;
   const trim = trimWindow(layout.startMs, layout.endMs);

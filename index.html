@@ -231,13 +231,6 @@
 
             <details class="advanced">
               <summary><span data-i18n="advanced">Pokročilé</span></summary>
-              <section class="panel" aria-label="Ořez aktivity" data-i18n-aria="trim">
-                <div class="panel-title-row"><span class="field-label" data-i18n="trim">Ořez společného úseku</span><span class="field-unit" data-i18n="seconds">sekundy</span></div>
-                <div class="field-grid">
-                  <label class="field"><span data-i18n="start">Začátek</span><input id="trimStart" type="number" min="0" step="1" value="0" /></label>
-                  <label class="field"><span data-i18n="end">Konec</span><input id="trimEnd" type="number" min="0" step="1" value="0" /></label>
-                </div>
-              </section>
               <section class="panel" aria-label="Časové pásmo výstupu" data-i18n-aria="timeZone">
                 <label class="field">
                   <span class="panel-title-row"><span data-i18n="timeZone">Časové pásmo výstupu</span><span class="zone-badge" id="zoneBadge"></span></span>
@@ -265,7 +258,7 @@
             <ul class="checks" id="checksList" aria-label="Kontrola dat" data-i18n-aria="checksHeading" hidden></ul>
 
             <div class="chart-toolbar">
-              <span><span class="chart-title" data-i18n="chartTitle">Srovnání záznamů</span><span class="chart-hint" data-i18n="trimHint">Ořez: táhněte modré okraje grafu</span></span>
+              <span><span class="chart-title" data-i18n="chartTitle">Srovnání záznamů</span></span>
               <div class="chart-legend"><button type="button" data-series="watch" aria-pressed="true" title="Zobrazit nebo skrýt" data-i18n-title="toggleSeries"><i class="legend-watch"></i><span data-i18n="watch">Hodinky</span></button><button type="button" data-series="kinomap" aria-pressed="true" title="Zobrazit nebo skrýt" data-i18n-title="toggleSeries"><i class="legend-source"></i><span data-i18n="kinomap">Kinomap</span></button></div>
             </div>
             <div class="chart-frame">
@@ -273,6 +266,20 @@
               <div class="chart-tip" id="chartTip" hidden></div>
             </div>
             <div class="chart-axis"><span id="chartAxisStart">—</span><span data-i18n="fromStart">Čas od začátku →</span><span id="chartAxisEnd">—</span></div>
+
+            <div class="trim-bar" id="trimBar">
+              <div class="trim-summary">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.6 7.6 20 18M8.6 16.4 20 6"/></svg>
+                <span><span data-i18n="trim">Ořez</span>: <strong id="trimStatus"></strong></span>
+                <button class="outline-button" id="trimToggle" type="button" aria-expanded="false" aria-controls="trimFields"></button>
+              </div>
+              <div class="trim-fields" id="trimFields" hidden>
+                <label class="field"><span data-i18n="trimStartLabel">Začátek · s</span><input id="trimStart" type="number" min="0" step="1" value="0" /></label>
+                <label class="field"><span data-i18n="trimEndLabel">Konec · s</span><input id="trimEnd" type="number" min="0" step="1" value="0" /></label>
+                <span class="trim-hint" data-i18n="trimHint">nebo táhněte modré okraje grafu</span>
+                <button class="link-button" id="trimReset" type="button" data-i18n="trimReset">Zrušit ořez</button>
+              </div>
+            </div>
 
             <div class="laps-panel" id="lapsPanel" hidden>
               <span class="chart-title" data-i18n="lapsTable">Kola</span>

@@ -251,6 +251,18 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
 .legend-watch { background: var(--series-watch); }
 .legend-source { background: var(--series-source); }
 #comparisonChart { display: block; width: 100%; height: 440px; touch-action: none; }
+.trim-bar { margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line) inset; }
+.trim-summary { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+.trim-summary svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.trim-summary strong { color: var(--ink); font-weight: 600; }
+.trim-summary .outline-button { margin: 0 0 0 auto; padding: 5px 12px; color: var(--ink); }
+.trim-fields { display: flex; align-items: flex-end; gap: 12px; margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.trim-fields[hidden] { display: none; }
+.trim-fields .field { width: 120px; }
+.trim-hint { align-self: center; color: var(--subtle); font-size: 12px; }
+.trim-fields .link-button { align-self: center; margin-left: auto; }
+.link-button { padding: 0; border: 0; color: var(--muted); background: none; font-weight: 600; cursor: pointer; }
+.link-button:hover { color: var(--accent); }
 .chart-hint { margin-left: 10px; color: var(--subtle); font-size: 12px; font-weight: 500; }
 .update-toast { position: fixed; bottom: 20px; left: 50%; z-index: 50; display: flex; align-items: center; gap: 14px; padding: 10px 12px 10px 16px; border-radius: 12px; color: var(--ink); background: var(--surface); box-shadow: 0 0 0 1px var(--line-strong), 0 10px 30px rgba(0, 0, 0, .25); font-size: 13px; font-weight: 600; transform: translateX(-50%); }
 .update-toast[hidden] { display: none; }

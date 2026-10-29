@@ -4,7 +4,7 @@ import { buildBatchWorkout, planBatch } from "./batch.js";
 import { checkWorkout } from "./checks.js";
 import { collectDirectoryFiles, fitFileName, titleFromKinomapFileName } from "./files.js";
 import { renderBatchTabs } from "./ui/batch.js";
-import { drawChart, setupChartLegend, setupChartTrim } from "./ui/chart.js";
+import { drawChart, isTrimMode, setTrimMode, setupChartLegend, setupChartTrim } from "./ui/chart.js";
 import {
   applyStaticTranslations, byId, displayNumber, elements, formatDuration, setNotice, sportLabel, state, t, timeRange, translateMessage, setZone, zone,
 } from "./ui/context.js";
@@ -28,6 +28,30 @@ function renderLapOptions(sport, selected = elements.lapPreset.value) {
   elements.lapPreset.replaceChildren(...options.map(([value, label]) => new Option(label, value)));
   elements.lapPreset.value = options.some(([value]) => value === selected) ? selected : String(fallback);
   elements.lapCustomField.hidden = elements.lapPreset.value !== "custom";
+}
+
+// Trimming is a mode: the toggle shows the chart handles and the start/end fields below the chart.
+function showTrim(on) {
+  setTrimMode(on);
+  byId("trimToggle").setAttribute("aria-expanded", String(on));
+  byId("trimFields").hidden = !on;
+  renderTrimStatus();
+}
+
+// The line under the chart always says what the export leaves out.
+function renderTrimStatus() {
+  const cut = [[elements.trimStart.value, "trimStartCut"], [elements.trimEnd.value, "trimEndCut"]]
+    .filter(([seconds]) => Number(seconds) > 0)
+    .map(([seconds, key]) => t(key, { time: formatDuration(Number(seconds)) }));
+  byId("trimStatus").textContent = cut.length ? cut.join(" · ") : t("trimNone");
+  byId("trimToggle").textContent = t(isTrimMode() ? "trimDone" : "trimEdit");
+}
+
+// Each activity starts untrimmed, or with the trim its tab already had.
+function resetTrim(settings = {}) {
+  elements.trimStart.value = settings.trimStartSeconds ?? "0";
+  elements.trimEnd.value = settings.trimEndSeconds ?? "0";
+  showTrim(Number(elements.trimStart.value) > 0 || Number(elements.trimEnd.value) > 0);
 }
 
 // A new activity starts from the lap distance last used for its sport.
@@ -201,8 +225,7 @@ function applySettings(settings) {
   state.mode = settings.mode;
   elements.alignmentMode.value = settings.alignmentMode;
   elements.offset.value = String(settings.offsetSeconds);
-  elements.trimStart.value = settings.trimStartSeconds;
-  elements.trimEnd.value = settings.trimEndSeconds;
+  resetTrim(settings);
   renderLapOptions(state.kinomap?.sport, settings.lapPreset);
   elements.lapDistance.value = settings.customLapDistance;
   elements.activityName.value = settings.activityName;
@@ -269,6 +292,7 @@ async function selectBatchItem(item) {
   if (active === item) return;
   if (active && state.kinomap) active.settings = currentSettings();
   state.batch.activeId = item.id;
+  resetTrim();
   setMetricSources();
   setFeel();
   state.zoneChoice = null;
@@ -401,6 +425,7 @@ async function loadKinomap(file, sourceDirectoryHandle = null, { keepBatch = fal
   }
   if (!keepBatch) {
     state.zoneChoice = null;
+    resetTrim();
     setMetricSources();
     setFeel();
   }
@@ -556,6 +581,7 @@ function renderChecks() {
 
 function render() {
   syncZone();
+  renderTrimStatus();
   updateModeButtons();
   updateFileRows();
   updateContext();
@@ -663,6 +689,12 @@ elements.manualStart.addEventListener("input", () => {
 elements.offset.addEventListener("input", render);
 elements.alignmentMode.addEventListener("change", () => {
   elements.alignmentHint.textContent = elements.alignmentMode.value === "absolute" ? t("timeUTC") : t("elapsedAlignment");
+  render();
+});
+byId("trimToggle").addEventListener("click", () => showTrim(!isTrimMode()));
+byId("trimReset").addEventListener("click", () => {
+  elements.trimStart.value = "0";
+  elements.trimEnd.value = "0";
   render();
 });
 elements.trimStart.addEventListener("input", render);
