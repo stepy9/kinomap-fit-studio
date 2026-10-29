@@ -23,6 +23,23 @@ export function savedTheme() {
   }
 }
 
+// Last-used lap distance per sport and feel/effort, offered as defaults for the next activity.
+const defaultsKey = "kinomap-fit-defaults";
+
+export function savedDefaults() {
+  try {
+    return JSON.parse(localStorage.getItem(defaultsKey)) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveDefaults(patch) {
+  try {
+    localStorage.setItem(defaultsKey, JSON.stringify({ ...savedDefaults(), ...patch }));
+  } catch {}
+}
+
 export function savedLanguage() {
   try {
     return localStorage.getItem("kinomap-fit-language") === "en" ? "en" : "cs";

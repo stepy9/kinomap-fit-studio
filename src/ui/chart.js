@@ -6,6 +6,8 @@ const minimumWindowMs = 10_000;
 let layout = null;
 // Series hidden from the legend; both recordings are shown by default.
 const hiddenSeries = new Set();
+// Moment under the mouse pointer, shown as a guide line with both recordings' values.
+let hoverMs = null;
 
 function chartSources() {
   const kinomap = state.kinomap;
@@ -103,19 +105,21 @@ export function drawChart() {
   // Pace lanes are drawn in seconds per 500 m or per km with faster pace at the top, as Garmin does.
   const paceLane = (meters, unit, fastest, slowest) => ({
     key: "speed", title: t("paceLane"), unit, min: fastest, max: slowest, invert: true,
-    value: (speed) => (speed > 0 ? meters / speed : null),
+    value: (speed) => (speed > 0 ? meters / speed : null), format: formatDuration,
   });
+  const whole = (value) => String(Math.round(value));
   const lanes = [
-    { key: "heartRate", title: t("heartRateLane"), unit: "bpm", min: 40, max: 200 },
+    { key: "heartRate", title: t("heartRateLane"), unit: "bpm", min: 40, max: 200, format: whole },
     sport === "cycling"
-      ? { key: "speed", title: t("speedLane"), unit: "km/h", min: 0, max: 50, scale: 3.6, grow: true }
+      ? { key: "speed", title: t("speedLane"), unit: "km/h", min: 0, max: 50, scale: 3.6, grow: true, format: (value) => value.toFixed(1) }
       : sport === "running" ? paceLane(1000, "min/km", 180, 480) : paceLane(500, "min/500 m", 90, 210),
     // Treadmill runs show power only when a recording carries it.
     sport === "running" && ![...sources.kinomap, ...sources.fit].some((record) => record.power != null)
       ? null
-      : { key: "power", title: t("powerLane"), unit: "W", min: 0, max: 400, grow: true },
-    { key: "cadence", title: t("cadenceLane"), unit: sport === "cycling" ? "rpm" : "spm", min: 0, max: cadenceMax },
+      : { key: "power", title: t("powerLane"), unit: "W", min: 0, max: 400, grow: true, format: whole },
+    { key: "cadence", title: t("cadenceLane"), unit: sport === "running" ? "spm" : "rpm", min: 0, max: cadenceMax, format: whole },
   ].filter(Boolean);
+  for (const lane of lanes) lane.laneValue = (raw) => (lane.value ? lane.value(raw) : raw * (lane.scale ?? 1));
   const left = 56;
   const right = 10;
   const top = 7;
@@ -136,7 +140,7 @@ export function drawChart() {
     const lane = lanes[laneIndex];
     const laneTop = top + laneIndex * (laneHeight + laneGap);
     const laneBottom = laneTop + laneHeight;
-    const laneValue = (raw) => (lane.value ? lane.value(raw) : raw * (lane.scale ?? 1));
+    const { laneValue } = lane;
     const sourceValues = [
       ...sources.kinomap.map((record) => record[lane.key]),
       ...sources.fit.map((record) => record[lane.key]),
@@ -195,7 +199,7 @@ export function drawChart() {
   }
 
   layout = state.kinomap
-    ? { left, top, plotWidth, plotBottom: height - bottom, startMs: sources.startMs, endMs: sources.endMs, span }
+    ? { left, top, plotWidth, plotBottom: height - bottom, startMs: sources.startMs, endMs: sources.endMs, span, lanes, sources }
     : null;
   byId("chartAxisStart").textContent = layout ? clockTime(layout.startMs) : "—";
   byId("chartAxisEnd").textContent = layout ? clockTime(layout.endMs) : "—";
@@ -204,6 +208,54 @@ export function drawChart() {
       shade: color("--chart-trim"), handle: color("--accent"), grip: color("--surface"),
     });
   }
+  drawHover(context, labelColor);
+}
+
+// The record nearest to a moment, if one lies within a few seconds of it.
+function nearest(records, ms) {
+  let low = 0;
+  let high = records.length - 1;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (records[middle].chartTime < ms) low = middle + 1;
+    else high = middle;
+  }
+  const candidates = [records[low - 1], records[low]].filter(Boolean);
+  const best = candidates.sort((a, b) => Math.abs(a.chartTime - ms) - Math.abs(b.chartTime - ms))[0];
+  return best && Math.abs(best.chartTime - ms) <= 5000 ? best : null;
+}
+
+// Hovering shows a guide line and both recordings' values at that moment.
+function drawHover(context, lineColor) {
+  const tip = byId("chartTip");
+  if (!layout || hoverMs == null || hoverMs < layout.startMs || hoverMs > layout.endMs) {
+    tip.hidden = true;
+    return;
+  }
+  const x = layout.left + ((hoverMs - layout.startMs) / layout.span) * layout.plotWidth;
+  context.save();
+  context.strokeStyle = lineColor;
+  context.globalAlpha = 0.5;
+  context.setLineDash([3, 3]);
+  context.beginPath();
+  context.moveTo(x, layout.top);
+  context.lineTo(x, layout.plotBottom);
+  context.stroke();
+  context.restore();
+
+  const watch = hiddenSeries.has("watch") ? null : nearest(layout.sources.fit, hoverMs);
+  const kinomap = hiddenSeries.has("kinomap") ? null : nearest(layout.sources.kinomap, hoverMs);
+  const cell = (record, lane, series) => {
+    const value = record?.[lane.key] == null ? null : lane.laneValue(record[lane.key]);
+    return `<span class="tip-value is-${series}">${Number.isFinite(value) ? lane.format(value) : "—"}</span>`;
+  };
+  const showWatch = layout.sources.fit.length && !hiddenSeries.has("watch");
+  const showKinomap = !hiddenSeries.has("kinomap");
+  tip.innerHTML = `<div class="tip-time">${clockTime(hoverMs)}</div>${layout.lanes.map((lane) => `<div class="tip-row"><span>${lane.title.toLowerCase()}</span>${showWatch ? cell(watch, lane, "watch") : ""}${showKinomap ? cell(kinomap, lane, "kinomap") : ""}<span class="tip-unit">${lane.unit}</span></div>`).join("")}`;
+  tip.hidden = false;
+  const width = tip.offsetWidth;
+  const toLeft = x + 12 + width > layout.left + layout.plotWidth;
+  tip.style.left = `${toLeft ? x - 12 - width : x + 12}px`;
 }
 
 function handleAt(clientX) {
@@ -235,9 +287,16 @@ export function setupChartTrim(onChange) {
   let dragging = null;
   canvas.addEventListener("pointermove", (event) => {
     if (!dragging) {
-      canvas.style.cursor = handleAt(event.clientX) ? "ew-resize" : "";
+      const onHandle = handleAt(event.clientX);
+      canvas.style.cursor = onHandle ? "ew-resize" : "";
+      if (layout && event.pointerType === "mouse") {
+        const x = event.clientX - canvas.getBoundingClientRect().left;
+        hoverMs = onHandle || x < layout.left ? null : layout.startMs + ((x - layout.left) / layout.plotWidth) * layout.span;
+        drawChart();
+      }
       return;
     }
+    hoverMs = null;
     const rect = canvas.getBoundingClientRect();
     const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left - layout.left) / layout.plotWidth));
     const ms = layout.startMs + ratio * layout.span;
@@ -264,4 +323,9 @@ export function setupChartTrim(onChange) {
   };
   canvas.addEventListener("pointerup", stop);
   canvas.addEventListener("pointercancel", stop);
+  canvas.addEventListener("pointerleave", () => {
+    if (dragging || hoverMs == null) return;
+    hoverMs = null;
+    drawChart();
+  });
 }

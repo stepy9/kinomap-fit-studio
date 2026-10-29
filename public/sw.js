@@ -1,5 +1,6 @@
 // Offline support: pages come from the network first, other files from the cache while it refreshes them.
-const cacheName = "kinomap-fit-v2";
+// The build stamps a version into the cache name, so each release gets its own cache and counts as a new worker.
+const cacheName = "kinomap-fit-__BUILD__";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(cacheName).then((cache) => cache.addAll(["./", "./favicon.svg", "./manifest.webmanifest"])));

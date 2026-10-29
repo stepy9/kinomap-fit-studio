@@ -268,8 +268,16 @@
               <span><span class="chart-title" data-i18n="chartTitle">Srovnání záznamů</span><span class="chart-hint" data-i18n="trimHint">Ořez: táhněte modré okraje grafu</span></span>
               <div class="chart-legend"><button type="button" data-series="watch" aria-pressed="true" title="Zobrazit nebo skrýt" data-i18n-title="toggleSeries"><i class="legend-watch"></i><span data-i18n="watch">Hodinky</span></button><button type="button" data-series="kinomap" aria-pressed="true" title="Zobrazit nebo skrýt" data-i18n-title="toggleSeries"><i class="legend-source"></i><span data-i18n="kinomap">Kinomap</span></button></div>
             </div>
-            <canvas id="comparisonChart" aria-label="Graf tepu, výkonu a kadence podle času" data-i18n-aria="chartAria"></canvas>
+            <div class="chart-frame">
+              <canvas id="comparisonChart" aria-label="Graf tepu, výkonu a kadence podle času" data-i18n-aria="chartAria"></canvas>
+              <div class="chart-tip" id="chartTip" hidden></div>
+            </div>
             <div class="chart-axis"><span id="chartAxisStart">—</span><span data-i18n="fromStart">Čas od začátku →</span><span id="chartAxisEnd">—</span></div>
+
+            <div class="laps-panel" id="lapsPanel" hidden>
+              <span class="chart-title" data-i18n="lapsTable">Kola</span>
+              <div class="laps-scroll"><table class="laps-table" id="lapsTable"></table></div>
+            </div>
 
             <div class="export-row">
               <div class="start-stamp"><span data-i18n="outputStart">Čas aktivity</span><strong id="startStamp">—</strong></div>
@@ -279,6 +287,10 @@
           </section>
         </div>
       </section>
+      <div class="update-toast" id="updateToast" role="status" hidden>
+        <span data-i18n="updateReady">Je k dispozici nová verze aplikace.</span>
+        <button class="outline-button" id="updateReload" type="button" data-i18n="updateReload">Obnovit</button>
+      </div>
       <footer class="footer-line"><span>Kinomap FIT Studio</span><span data-i18n="setupIntro">Převede tréninky z Kinomapu do FIT pro Garmin Connect, volitelně spojené s tepem z hodinek.</span><span id="footerZone" title="Místní časové pásmo" data-i18n-title="localZone"></span></footer>
     </main>
     <script type="module" src="/src/app.js"></script>

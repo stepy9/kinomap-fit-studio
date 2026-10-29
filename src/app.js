@@ -9,7 +9,7 @@ import {
   applyStaticTranslations, byId, displayNumber, elements, formatDuration, setNotice, sportLabel, state, t, timeRange, translateMessage, setZone, zone,
 } from "./ui/context.js";
 import { exportFit, saveFit } from "./ui/export.js";
-import { savedLanguage, savedTheme, setLanguageMenu, setTheme } from "./ui/preferences.js";
+import { saveDefaults, savedDefaults, savedLanguage, savedTheme, setLanguageMenu, setTheme } from "./ui/preferences.js";
 import { allZones, defaultZoneFor, offsetLabel, systemZone, zoneOffsetMinutes } from "./zones.js";
 
 function lapLabel(meters) {
@@ -28,6 +28,31 @@ function renderLapOptions(sport, selected = elements.lapPreset.value) {
   elements.lapPreset.replaceChildren(...options.map(([value, label]) => new Option(label, value)));
   elements.lapPreset.value = options.some(([value]) => value === selected) ? selected : String(fallback);
   elements.lapCustomField.hidden = elements.lapPreset.value !== "custom";
+}
+
+// A new activity starts from the lap distance last used for its sport.
+function applySavedLapDistance(sport) {
+  const saved = savedDefaults().laps?.[sport];
+  renderLapOptions(sport, saved?.preset ?? "");
+  elements.lapDistance.value = saved?.custom ?? defaultLapDistance(sport);
+  elements.lapCustomField.hidden = elements.lapPreset.value !== "custom";
+}
+
+function saveLapDistance() {
+  const sport = state.kinomap?.sport;
+  if (!sport) return;
+  saveDefaults({ laps: { ...savedDefaults().laps, [sport]: { preset: elements.lapPreset.value, custom: elements.lapDistance.value } } });
+}
+
+// Settings for a folder activity that was never opened: the remembered defaults.
+function rememberedSettings(sport) {
+  const saved = savedDefaults();
+  const lap = saved.laps?.[sport];
+  return {
+    lapDistanceMeters: lap ? (lap.preset === "custom" ? lap.custom : lap.preset) : undefined,
+    workoutFeel: saved.workoutFeel,
+    workoutRpe: saved.workoutRpe,
+  };
 }
 
 function lapDistanceValue() {
@@ -88,6 +113,7 @@ function renderFeelFaces() {
       button.addEventListener("click", () => {
         elements.workoutFeel.value = elements.workoutFeel.value === button.dataset.value ? "" : button.dataset.value;
         renderFeelFaces();
+        saveDefaults(feelSettings());
         render();
       });
       faces.append(button);
@@ -125,12 +151,17 @@ function renderFeelOptions() {
   renderRpeLabel();
 }
 
+function rememberedFeel() {
+  const { workoutFeel, workoutRpe } = savedDefaults();
+  return Object.fromEntries(Object.entries({ workoutFeel, workoutRpe }).filter(([, value]) => value !== undefined));
+}
+
 function feelSettings() {
   const rpe = Number(elements.workoutRpe.value);
   return { workoutFeel: elements.workoutFeel.value === "" ? null : Number(elements.workoutFeel.value), workoutRpe: rpe || null };
 }
 
-function setFeel(settings = defaultFeel) {
+function setFeel(settings = { ...defaultFeel, ...rememberedFeel() }) {
   const feel = settings.workoutFeel === undefined ? defaultFeel.workoutFeel : settings.workoutFeel;
   const rpe = settings.workoutRpe === undefined ? defaultFeel.workoutRpe : settings.workoutRpe;
   elements.workoutFeel.value = feel == null ? "" : String(feel);
@@ -276,7 +307,7 @@ async function exportBatch(targetDirectory = null) {
     item.status = "saving";
     renderBatch();
     try {
-      const workout = buildBatchWorkout(item, item.settings);
+      const workout = buildBatchWorkout(item, item.settings ?? rememberedSettings(item.sport));
       const { saved } = await saveFit(workout.fitBytes, fitFileName(workout.activityName, t("fallbackActivity")), targetDirectory ?? item.directoryHandle);
       counts[saved ? "saved" : "downloaded"] += 1;
       Object.assign(item, { status: null, failure: null, exported: true, selected: false });
@@ -304,6 +335,7 @@ function resetSummary() {
   }
   elements.startStamp.textContent = "—";
   byId("summaryElevation").hidden = true;
+  byId("lapsPanel").hidden = true;
 }
 
 function updateFileRows() {
@@ -380,8 +412,7 @@ async function loadKinomap(file, sourceDirectoryHandle = null, { keepBatch = fal
     state.kinomapText = await file.text();
     elements.manualStart.value = "";
     parseCurrentKinomap();
-    renderLapOptions(state.kinomap.sport, "");
-    elements.lapDistance.value = defaultLapDistance(state.kinomap.sport);
+    applySavedLapDistance(state.kinomap.sport);
     updateFileRows();
     if (state.fit) offsetEstimate();
     else render();
@@ -420,6 +451,42 @@ function updateModeButtons() {
   elements.sourcesPanel.hidden = state.mode !== "merge";
 }
 
+// Pace per 500 m for rowing, per km for running, speed for cycling.
+function speedText(speed, sport) {
+  if (!(speed > 0)) return "—";
+  if (sport === "cycling") return `${displayNumber(speed * 3.6, 1)} km/h`;
+  return sport === "rowing" ? `${formatDuration(500 / speed)} /500 m` : `${formatDuration(1000 / speed)} min/km`;
+}
+
+// The laps written to the FIT, as Garmin Connect will list them.
+function renderLaps(laps, sport) {
+  const panel = byId("lapsPanel");
+  panel.hidden = !laps?.length;
+  if (!laps?.length) return;
+  const value = (number, unit = "", digits = 0) => (number == null ? "—" : `${displayNumber(number, digits)}${unit}`);
+  const columns = [
+    [t("lapColumn"), (lap, index) => String(index + 1)],
+    [t("lapTime"), (lap) => formatDuration(lap.timerSeconds)],
+    [t("lapDistanceColumn"), (lap) => (lap.distance >= 1000 ? value(lap.distance / 1000, " km", 2) : value(lap.distance, " m"))],
+    [sport === "cycling" ? t("lapSpeed") : t("lapPace"), (lap) => speedText(lap.avgSpeed, sport)],
+    [t("lapHeartRate"), (lap) => value(lap.avgHeartRate, " bpm")],
+    [t("lapPower"), (lap) => value(lap.avgPower, " W")],
+    [t("lapCadence"), (lap) => value(lap.avgCadence, sport === "running" ? " spm" : " rpm")],
+    ...(sport === "rowing" ? [
+      [t("lapStrokes"), (lap) => value(lap.cycles)],
+      [t("lapStrokeDistance"), (lap) => value(lap.avgStrokeDistance, "", 1)],
+    ] : []),
+  ];
+  const head = document.createElement("tr");
+  head.append(...columns.map(([title]) => Object.assign(document.createElement("th"), { textContent: title })));
+  const rows = laps.map((lap, index) => {
+    const row = document.createElement("tr");
+    row.append(...columns.map(([, cell]) => Object.assign(document.createElement("td"), { textContent: cell(lap, index) })));
+    return row;
+  });
+  byId("lapsTable").replaceChildren(head, ...rows);
+}
+
 function renderSummary(summary, startMs, endMs, sport) {
   byId("summaryDuration").textContent = formatDuration(summary.timerSeconds);
   byId("summaryDistance").textContent = `${displayNumber(summary.distance / 1000, 2)} km`;
@@ -433,7 +500,7 @@ function renderSummary(summary, startMs, endMs, sport) {
     ? "—" : `${displayNumber(summary.avgPower)} / ${displayNumber(summary.maxPower)} W`;
   byId("summaryCadenceLabel").textContent = t("cadence");
   byId("summaryCadence").textContent = summary.avgCadence == null
-    ? "—" : `${displayNumber(summary.avgCadence)} / ${displayNumber(summary.maxCadence)} ${sport === "cycling" ? "rpm" : "spm"}`;
+    ? "—" : `${displayNumber(summary.avgCadence)} / ${displayNumber(summary.maxCadence)} ${sport === "running" ? "spm" : "rpm"}`;
   const speedLabel = byId("summarySpeedLabel");
   const speedValue = byId("summarySpeed");
   if (summary.avgSpeed == null || summary.avgSpeed <= 0) {
@@ -443,9 +510,8 @@ function renderSummary(summary, startMs, endMs, sport) {
     speedLabel.textContent = t("averageSpeed");
     speedValue.textContent = `${displayNumber(summary.avgSpeed * 3.6, 1)} km/h`;
   } else {
-    const secondsPerUnit = 1000 / summary.avgSpeed / (sport === "rowing" ? 2 : 1);
     speedLabel.textContent = t("averagePace");
-    speedValue.textContent = `${formatDuration(secondsPerUnit)} ${sport === "rowing" ? "/500 m" : "min/km"}`;
+    speedValue.textContent = speedText(summary.avgSpeed, sport);
   }
   elements.startStamp.textContent = timeRange(startMs, endMs);
 }
@@ -527,6 +593,7 @@ function render() {
       );
       elements.lapNote.textContent = state.result.lapDistance > 0 ? t("lapCount", { count: state.result.laps.length }) : "";
       renderSummary(state.result.summary, state.result.startMs, state.result.endMs, state.result.sport);
+      renderLaps(state.result.laps, state.result.sport);
       renderChecks();
       elements.export.disabled = false;
       elements.liveState.classList.add("is-ready");
@@ -600,9 +667,13 @@ elements.alignmentMode.addEventListener("change", () => {
 });
 elements.trimStart.addEventListener("input", render);
 elements.trimEnd.addEventListener("input", render);
-elements.lapDistance.addEventListener("input", render);
+elements.lapDistance.addEventListener("input", () => {
+  saveLapDistance();
+  render();
+});
 elements.lapPreset.addEventListener("change", () => {
   elements.lapCustomField.hidden = elements.lapPreset.value !== "custom";
+  saveLapDistance();
   render();
 });
 elements.activityName.addEventListener("input", render);
@@ -610,6 +681,7 @@ elements.timeZone.addEventListener("change", () => changeZone(elements.timeZone.
 for (const select of Object.values(elements.sources)) select.addEventListener("change", render);
 elements.workoutRpe.addEventListener("input", () => {
   renderRpeLabel();
+  saveDefaults(feelSettings());
   render();
 });
 byId("autoOffsetButton").addEventListener("click", offsetEstimate);
@@ -690,6 +762,14 @@ setFeel();
 render();
 
 // Installable and offline in the built app; the dev server stays uncached.
+// A new release takes over the open page; offer a reload instead of switching under the user's hands.
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js").catch(() => {});
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadController) byId("updateToast").hidden = false;
+  });
+  navigator.serviceWorker.register("./sw.js")
+    .then((registration) => window.setInterval(() => registration.update().catch(() => {}), 60 * 60 * 1000))
+    .catch(() => {});
+  byId("updateReload").addEventListener("click", () => window.location.reload());
 }
