@@ -21,8 +21,9 @@ const fixtureFit = (fixture) => decodeGarminFit(readFixture(fixture, "watch.fit"
 
 // Private real-world recordings live in the git-ignored samples folder; their test is skipped when it is absent.
 const samplesRoot = path.resolve("samples");
-const samples = fs.existsSync(samplesRoot) ? fs.readdirSync(samplesRoot).map((folderName) => {
-  const folder = path.join(samplesRoot, folderName);
+// Each recording sits in its own subfolder; loose files, such as FIT exported straight into samples, are ignored.
+const samples = fs.existsSync(samplesRoot) ? fs.readdirSync(samplesRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => {
+  const folder = path.join(samplesRoot, entry.name);
   const files = fs.readdirSync(folder);
   return {
     folder,
