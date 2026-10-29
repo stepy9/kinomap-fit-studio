@@ -104,9 +104,13 @@ function renderFeelFaces() {
   label.classList.toggle("is-empty", value === "");
 }
 
+// Thumb colour per effort value along the blue-to-red track; 0 means not set.
+const rpeColors = ["#9aa4b2", "#1e88e5", "#1a98c4", "#16a89a", "#2fb06b", "#43b649", "#a4c639", "#f2c230", "#f28c28", "#ec6a2c", "#e53935"];
+
 // The effort slider runs 0–10, where 0 leaves perceived effort out of the FIT.
 function renderRpeLabel() {
   const value = Number(elements.workoutRpe.value);
+  elements.workoutRpe.style.setProperty("--rpe-color", rpeColors[value]);
   const label = byId("rpeLabel");
   label.textContent = value ? `${value} – ${rpeLabel(value)}` : t("rpeNotSet");
   label.classList.toggle("is-empty", !value);
