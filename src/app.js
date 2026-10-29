@@ -156,6 +156,7 @@ async function selectBatchItem(item) {
   if (active === item) return;
   if (active && state.kinomap) active.settings = currentSettings();
   state.batch.activeId = item.id;
+  setMetricSources();
   state.zoneChoice = null;
   state.fit = null;
   state.fitFile = null;
@@ -274,7 +275,10 @@ async function loadKinomap(file, sourceDirectoryHandle = null, { keepBatch = fal
     Object.assign(state, { batch: null, fit: null, fitFile: null, estimate: null, mode: "convert", zoneChoice: null });
     renderBatch();
   }
-  if (!keepBatch) state.zoneChoice = null;
+  if (!keepBatch) {
+    state.zoneChoice = null;
+    setMetricSources();
+  }
   state.error = null;
   state.outputDirectoryHandle = sourceDirectoryHandle;
   try {
@@ -580,6 +584,7 @@ const observer = new ResizeObserver(drawChart);
 observer.observe(elements.chart);
 setTheme(savedTheme(), false);
 setZone(systemZone());
+setMetricSources();
 setLanguage(savedLanguage(), false);
 render();
 
