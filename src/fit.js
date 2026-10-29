@@ -160,6 +160,9 @@ export function encodeFit(records, summary, laps, startMs, endMs, timeZone = "Eu
     messageIndex: 0,
     ...summaryFields,
     sportProfileName: activityName,
+    // FIT stores perceived effort ten times over, so 1–10 becomes 10–100.
+    workoutFeel: summary.workoutFeel ?? undefined,
+    workoutRpe: summary.workoutRpe == null ? undefined : summary.workoutRpe * 10,
     firstLapIndex: 0,
     numLaps: laps.length,
     event: "session",

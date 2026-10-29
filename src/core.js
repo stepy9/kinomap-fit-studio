@@ -354,6 +354,10 @@ function lapsFor(records, lapDistance, calories, timerSeconds, sport) {
   });
 }
 
+// How the workout felt, as the watch asks after a recording: feel 0–100 in steps of 25, perceived effort 1–10.
+export const defaultFeel = { workoutFeel: 50, workoutRpe: 5 };
+const feelValue = (value, fallback) => (value === undefined ? fallback : value === null || value === "" ? null : Number(value));
+
 // Which recording each merged metric comes from (Kinomap reads the trainer and relays the strap); the other one fills the moments the chosen one lacks.
 export const defaultMetricSources = { heartRate: "kinomap", power: "kinomap", cadence: "kinomap" };
 
@@ -413,7 +417,11 @@ export function buildWorkout(kinomap, fit = null, options = {}) {
   const calories = kinomap.calories == null
     ? (mean(values(records, "power")) ?? 0) * timerSeconds * 0.0012
     : kinomap.calories * timerSeconds / sourceTimer;
-  const summary = summaryFor(records, durationSeconds, calories, kinomap.sport);
+  const summary = {
+    ...summaryFor(records, durationSeconds, calories, kinomap.sport),
+    workoutFeel: feelValue(options.workoutFeel, defaultFeel.workoutFeel),
+    workoutRpe: feelValue(options.workoutRpe, defaultFeel.workoutRpe),
+  };
   const lapDistance = options.lapDistanceMeters == null || options.lapDistanceMeters === ""
     ? defaultLapDistance(kinomap.sport)
     : Math.max(0, Number(options.lapDistanceMeters) || 0);

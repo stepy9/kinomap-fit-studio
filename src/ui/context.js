@@ -10,6 +10,7 @@ export const elements = {
   sources: { heartRate: byId("sourceHeartRate"), power: byId("sourcePower"), cadence: byId("sourceCadence") },
   timeZone: byId("timeZoneSelect"), zoneBadge: byId("zoneBadge"), footerZone: byId("footerZone"),
   manualStartLabel: byId("manualStartLabel"),
+  workoutFeel: byId("workoutFeel"), workoutRpe: byId("workoutRpe"),
   lapPreset: byId("lapPreset"), lapCustomField: byId("lapCustomField"), lapDistance: byId("lapDistance"), lapNote: byId("lapNote"),
   manualPanel: byId("manualDatePanel"), manualStart: byId("manualStart"), alignmentPanel: byId("alignmentPanel"),
   alignmentHint: byId("alignmentHint"), estimateNote: byId("estimateNote"), notice: byId("notice"), liveState: byId("liveState"),

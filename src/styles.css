@@ -186,6 +186,21 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
 .card > .panel:first-of-type, .section-heading + .panel, .section-heading + .manual-date + .panel { border-top: 0; padding-top: 0; }
 .panel-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .alignment-hint, .field-unit, .estimate-note { overflow: hidden; color: var(--subtle); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.feel-fields { display: grid; gap: 12px; }
+.feel-row { display: flex; align-items: center; gap: 12px; }
+.feel-faces { display: flex; gap: 6px; }
+.feel-face { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; color: var(--muted); background: var(--surface-2); box-shadow: 0 0 0 1px var(--line) inset; transition: background .15s, color .15s, transform .15s; }
+.feel-face:hover { color: var(--accent); transform: translateY(-1px); }
+.feel-face[aria-checked="true"] { color: #fff; background: var(--accent); box-shadow: none; }
+.feel-face svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.feel-face svg .eye { fill: currentColor; stroke: none; }
+.feel-label { color: var(--ink); font-size: 13px; font-weight: 600; }
+.feel-label.is-empty { color: var(--subtle); font-weight: 500; }
+.rpe-value { text-align: center; }
+.rpe-field input[type="range"] { width: 100%; height: 22px; min-height: 0; margin: 2px 0 0; padding: 0; border: 0; background: transparent; box-shadow: none; accent-color: var(--accent); cursor: pointer; }
+.rpe-field input[type="range"]:focus { box-shadow: none; }
+.rpe-field input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rpe-scale { display: flex; justify-content: space-between; color: var(--subtle); font-size: 12px; }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .metric-source-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .alignment-grid { grid-template-columns: minmax(0, 1fr) 110px; }

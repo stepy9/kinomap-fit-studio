@@ -198,6 +198,26 @@
               </div>
             </section>
 
+            <section class="panel" aria-label="Pocit a úsilí" data-i18n-aria="feelHeading">
+              <div class="panel-title-row"><span class="field-label" data-i18n="feelHeading">Pocit a úsilí</span></div>
+              <div class="feel-fields">
+                <div class="field">
+                  <span data-i18n="feel">Pocit</span>
+                  <div class="feel-row">
+                    <div class="feel-faces" id="feelFaces" role="radiogroup" aria-label="Pocit" data-i18n-aria="feel"></div>
+                    <span class="feel-label" id="feelLabel"></span>
+                  </div>
+                  <select id="workoutFeel" class="visually-hidden" tabindex="-1" aria-hidden="true"></select>
+                </div>
+                <label class="field rpe-field">
+                  <span data-i18n="rpe">Vnímané úsilí</span>
+                  <span class="feel-label rpe-value" id="rpeLabel"></span>
+                  <input id="workoutRpe" type="range" min="0" max="10" step="1" value="5" />
+                  <span class="rpe-scale" aria-hidden="true"><span data-i18n="rpeNone">Žádné</span><span data-i18n="rpeMaxEnd">Maximální</span></span>
+                </label>
+              </div>
+            </section>
+
             <section class="panel">
               <label class="field">
                 <span data-i18n="activityName">Název v metadatech FIT</span>

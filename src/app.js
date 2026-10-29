@@ -1,5 +1,5 @@
 import "./styles.css";
-import { buildWorkout, decodeGarminFit, defaultLapDistance, defaultMetricSources, estimateOffset, lapDistancePresets, parseKinomap } from "./core.js";
+import { buildWorkout, decodeGarminFit, defaultFeel, defaultLapDistance, defaultMetricSources, estimateOffset, lapDistancePresets, parseKinomap } from "./core.js";
 import { buildBatchWorkout, planBatch } from "./batch.js";
 import { checkWorkout } from "./checks.js";
 import { collectDirectoryFiles, fitFileName, titleFromKinomapFileName } from "./files.js";
@@ -45,6 +45,7 @@ function setLanguage(language, persist = true) {
   }
   applyStaticTranslations();
   renderLapOptions(state.kinomap?.sport);
+  renderFeelOptions();
   if (!state.kinomapFile && (!elements.activityName.value || elements.activityName.value === previousFallback || elements.activityName.value === "Kinomap - Rowing Workout")) {
     elements.activityName.value = `Kinomap - ${t("fallbackActivity")}`;
   }
@@ -57,6 +58,81 @@ function setLanguage(language, persist = true) {
   }
   renderBatch();
   render();
+}
+
+// Garmin's own label for each perceived effort value, 1 very light to 10 maximum.
+const rpeLabel = (value) => t(`rpe${value}`);
+
+// Faces from very weak to very strong: the mouth turns from a frown into a wide smile.
+const feelMouths = {
+  0: "M8 16.6c2.2-2.6 5.8-2.6 8 0",
+  25: "M8.6 16c2-1.4 4.8-1.4 6.8 0",
+  50: "M8.6 15.2h6.8",
+  75: "M8.6 14.4c2 1.6 4.8 1.6 6.8 0",
+  100: "M7.8 13.6c2.2 3.6 6.2 3.6 8.4 0Z",
+};
+const feelBrows = { 0: "M7.2 8.6l2.6-1.1M16.8 8.6l-2.6-1.1" };
+
+// The hidden feel select keeps the value; the faces show it, and a second click on the chosen face clears it.
+function renderFeelFaces() {
+  const value = elements.workoutFeel.value;
+  const faces = byId("feelFaces");
+  if (!faces.childElementCount) {
+    for (const level of [0, 25, 50, 75, 100]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "feel-face";
+      button.dataset.value = String(level);
+      button.setAttribute("role", "radio");
+      button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><circle class="eye" cx="9.2" cy="10.4" r="1.1"/><circle class="eye" cx="14.8" cy="10.4" r="1.1"/>${feelBrows[level] ? `<path d="${feelBrows[level]}"/>` : ""}<path d="${feelMouths[level]}"/></svg>`;
+      button.addEventListener("click", () => {
+        elements.workoutFeel.value = elements.workoutFeel.value === button.dataset.value ? "" : button.dataset.value;
+        renderFeelFaces();
+        render();
+      });
+      faces.append(button);
+    }
+  }
+  for (const button of faces.children) {
+    const checked = button.dataset.value === value;
+    button.setAttribute("aria-checked", String(checked));
+    button.title = t(`feel${button.dataset.value}`);
+    button.setAttribute("aria-label", button.title);
+  }
+  const label = byId("feelLabel");
+  label.textContent = value === "" ? t("feelNotSet") : t(`feel${value}`);
+  label.classList.toggle("is-empty", value === "");
+}
+
+// The effort slider runs 0–10, where 0 leaves perceived effort out of the FIT.
+function renderRpeLabel() {
+  const value = Number(elements.workoutRpe.value);
+  const label = byId("rpeLabel");
+  label.textContent = value ? `${value} – ${rpeLabel(value)}` : t("rpeNotSet");
+  label.classList.toggle("is-empty", !value);
+}
+
+// Relabels the feel options and effort value in the current language and keeps the chosen values.
+function renderFeelOptions() {
+  const value = elements.workoutFeel.value;
+  elements.workoutFeel.replaceChildren(...[0, 25, 50, 75, 100].map((level) => new Option(t(`feel${level}`), String(level))), new Option(t("notSet"), ""));
+  elements.workoutFeel.value = value;
+  renderFeelFaces();
+  renderRpeLabel();
+}
+
+function feelSettings() {
+  const rpe = Number(elements.workoutRpe.value);
+  return { workoutFeel: elements.workoutFeel.value === "" ? null : Number(elements.workoutFeel.value), workoutRpe: rpe || null };
+}
+
+function setFeel(settings = defaultFeel) {
+  const feel = settings.workoutFeel === undefined ? defaultFeel.workoutFeel : settings.workoutFeel;
+  const rpe = settings.workoutRpe === undefined ? defaultFeel.workoutRpe : settings.workoutRpe;
+  elements.workoutFeel.value = feel == null ? "" : String(feel);
+  elements.workoutRpe.value = String(rpe ?? 0);
+  renderFeelFaces();
+  renderRpeLabel();
 }
 
 function metricSources() {
@@ -79,6 +155,7 @@ function currentSettings() {
     customLapDistance: elements.lapDistance.value,
     lapDistanceMeters: lapDistanceValue(),
     sources: metricSources(),
+    ...feelSettings(),
     zoneChoice: state.zoneChoice,
     activityName: elements.activityName.value,
     manualStart: elements.manualStart.value || undefined,
@@ -95,6 +172,7 @@ function applySettings(settings) {
   elements.lapDistance.value = settings.customLapDistance;
   elements.activityName.value = settings.activityName;
   setMetricSources(settings.sources);
+  setFeel(settings);
   state.zoneChoice = settings.zoneChoice ?? null;
   if (settings.manualStart) {
     elements.manualStart.value = settings.manualStart;
@@ -157,6 +235,7 @@ async function selectBatchItem(item) {
   if (active && state.kinomap) active.settings = currentSettings();
   state.batch.activeId = item.id;
   setMetricSources();
+  setFeel();
   state.zoneChoice = null;
   state.fit = null;
   state.fitFile = null;
@@ -287,6 +366,7 @@ async function loadKinomap(file, sourceDirectoryHandle = null, { keepBatch = fal
   if (!keepBatch) {
     state.zoneChoice = null;
     setMetricSources();
+    setFeel();
   }
   state.error = null;
   state.outputDirectoryHandle = sourceDirectoryHandle;
@@ -437,6 +517,7 @@ function render() {
           trimEndSeconds: elements.trimEnd.value,
           lapDistanceMeters: lapDistanceValue(),
           sources: metricSources(),
+          ...feelSettings(),
           activityName: elements.activityName.value,
         },
       );
@@ -523,6 +604,10 @@ elements.lapPreset.addEventListener("change", () => {
 elements.activityName.addEventListener("input", render);
 elements.timeZone.addEventListener("change", () => changeZone(elements.timeZone.value));
 for (const select of Object.values(elements.sources)) select.addEventListener("change", render);
+elements.workoutRpe.addEventListener("input", () => {
+  renderRpeLabel();
+  render();
+});
 byId("autoOffsetButton").addEventListener("click", offsetEstimate);
 elements.export.addEventListener("click", exportFit);
 byId("batchExportButton").addEventListener("click", () => exportBatch());
@@ -596,6 +681,7 @@ setTheme(savedTheme(), false);
 setZone(systemZone());
 setMetricSources();
 setLanguage(savedLanguage(), false);
+setFeel();
 render();
 
 // Installable and offline in the built app; the dev server stays uncached.

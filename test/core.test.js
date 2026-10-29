@@ -416,3 +416,16 @@ test("takes each merged metric from the chosen source and fills gaps from the ot
   // The running watch stores cadence per leg, the workout keeps steps/min.
   assert.equal(fromWatch.records[middle].cadence, watchRecord.cadence * 2);
 });
+
+test("writes how the workout felt to the FIT session, mid values by default", () => {
+  const fixture = fixtures.find((item) => item.sport === "rowing");
+  const session = (options) => roundTrip(buildWorkout(fixtureKinomap(fixture), null, options).fitBytes).sessionMesgs[0];
+  assert.equal(session({}).workoutFeel, 50);
+  assert.equal(session({}).workoutRpe, 50);
+  const chosen = session({ workoutFeel: 75, workoutRpe: 8 });
+  assert.equal(chosen.workoutFeel, 75);
+  assert.equal(chosen.workoutRpe, 80);
+  const empty = session({ workoutFeel: null, workoutRpe: null });
+  assert.equal(empty.workoutFeel, undefined);
+  assert.equal(empty.workoutRpe, undefined);
+});
