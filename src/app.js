@@ -494,8 +494,19 @@ function folderCandidates(files) {
   };
 }
 
+// FIT files written by this tool carry manufacturer "development"; skip them so a previous export is never picked as the watch file.
+async function isExportedFit(file) {
+  try {
+    return decodeGarminFit(await file.arrayBuffer()).fileId?.manufacturer === "development";
+  } catch {
+    return false;
+  }
+}
+
 async function loadFolder(files) {
-  const chosen = folderCandidates(files);
+  const all = [...files];
+  const exported = await Promise.all(all.map((file) => /\.fit$/i.test(file.name) && isExportedFit(file)));
+  const chosen = folderCandidates(all.filter((_, index) => !exported[index]));
   if (!chosen.kinomap) {
     setNotice(t("noFolderKinomap"), "error");
     return;
