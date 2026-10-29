@@ -1,4 +1,9 @@
-import { elements, state, t } from "./context.js";
+import { elements, formatDuration, state, t } from "./context.js";
+
+// The chart spans the whole untrimmed section; the trim is shaded and adjusted by dragging its two handles.
+const handleHitPx = 10;
+const minimumWindowMs = 10_000;
+let layout = null;
 
 function chartSources() {
   const kinomap = state.kinomap;
@@ -11,9 +16,62 @@ function chartSources() {
     ...record, chartTime: record.timeMs + shift + offsetMs,
   }));
   const watch = fit?.records.map((record) => ({ ...record, chartTime: record.timeMs })) ?? [];
-  const startMs = state.result?.startMs ?? Math.min(source[0]?.chartTime ?? 0, watch[0]?.chartTime ?? Infinity);
-  const endMs = state.result?.endMs ?? Math.max(source.at(-1)?.chartTime ?? 1, watch.at(-1)?.chartTime ?? 0);
+  // Without trim the export covers the overlap of both recordings, or the whole Kinomap one when converting.
+  let startMs = source[0]?.chartTime ?? 0;
+  let endMs = source.at(-1)?.chartTime ?? 1;
+  if (watch.length && Math.min(endMs, watch.at(-1).chartTime) > Math.max(startMs, watch[0].chartTime)) {
+    startMs = Math.max(startMs, watch[0].chartTime);
+    endMs = Math.min(endMs, watch.at(-1).chartTime);
+  }
   return { kinomap: source, fit: watch, startMs, endMs: Math.max(startMs + 1, endMs) };
+}
+
+function trimWindow(startMs, endMs) {
+  const trimStartMs = Math.max(0, Number(elements.trimStart.value) || 0) * 1000;
+  const trimEndMs = Math.max(0, Number(elements.trimEnd.value) || 0) * 1000;
+  return {
+    windowStart: Math.min(endMs, startMs + trimStartMs),
+    windowEnd: Math.max(startMs, endMs - trimEndMs),
+    trimStartMs,
+    trimEndMs,
+  };
+}
+
+function drawTrim(context, { left, top, plotWidth, plotBottom, startMs, span }, trim, colors) {
+  const xFor = (ms) => left + ((ms - startMs) / span) * plotWidth;
+  const startX = xFor(trim.windowStart);
+  const endX = xFor(trim.windowEnd);
+  context.fillStyle = colors.shade;
+  if (startX > left) context.fillRect(left, top, startX - left, plotBottom - top);
+  if (endX < left + plotWidth) context.fillRect(endX, top, left + plotWidth - endX, plotBottom - top);
+  for (const [x, trimmedMs, align] of [[startX, trim.trimStartMs, "left"], [endX, trim.trimEndMs, "right"]]) {
+    context.strokeStyle = colors.handle;
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(x, top);
+    context.lineTo(x, plotBottom);
+    context.stroke();
+    // Grip in the middle of the handle.
+    context.fillStyle = colors.handle;
+    context.beginPath();
+    context.roundRect(x - 5, (top + plotBottom) / 2 - 16, 10, 32, 4);
+    context.fill();
+    context.strokeStyle = colors.grip;
+    context.lineWidth = 1;
+    for (const offset of [-2, 2]) {
+      context.beginPath();
+      context.moveTo(x + offset, (top + plotBottom) / 2 - 8);
+      context.lineTo(x + offset, (top + plotBottom) / 2 + 8);
+      context.stroke();
+    }
+    if (trimmedMs > 0) {
+      context.fillStyle = colors.handle;
+      context.font = "600 11px Inter, Segoe UI, system-ui, sans-serif";
+      context.textAlign = align === "left" ? "right" : "left";
+      context.fillText(`−${formatDuration(trimmedMs / 1000)}`, x + (align === "left" ? -8 : 8), top + 12);
+      context.textAlign = "left";
+    }
+  }
 }
 
 export function drawChart() {
@@ -47,11 +105,12 @@ export function drawChart() {
   const plotWidth = width - left - right;
   const span = Math.max(1, sources.endMs - sources.startMs);
   const theme = getComputedStyle(document.documentElement);
-  const colorKinomap = theme.getPropertyValue("--series-source").trim();
-  const colorFit = theme.getPropertyValue("--series-watch").trim();
-  const gridColor = theme.getPropertyValue("--chart-grid").trim();
-  const labelColor = theme.getPropertyValue("--chart-label").trim();
-  const subtleColor = theme.getPropertyValue("--chart-subtle").trim();
+  const color = (name) => theme.getPropertyValue(name).trim();
+  const colorKinomap = color("--series-source");
+  const colorFit = color("--series-watch");
+  const gridColor = color("--chart-grid");
+  const labelColor = color("--chart-label");
+  const subtleColor = color("--chart-subtle");
 
   for (let laneIndex = 0; laneIndex < lanes.length; laneIndex += 1) {
     const lane = lanes[laneIndex];
@@ -81,8 +140,8 @@ export function drawChart() {
     context.font = "10px Inter, Segoe UI, system-ui, sans-serif";
     context.fillText(lane.unit, 0, laneTop + 26);
 
-    const drawSeries = (records, color) => {
-      context.strokeStyle = color;
+    const drawSeries = (records, seriesColor) => {
+      context.strokeStyle = seriesColor;
       context.lineWidth = 2;
       context.lineJoin = "round";
       context.lineCap = "round";
@@ -108,4 +167,61 @@ export function drawChart() {
     drawSeries(sources.fit, colorFit);
     drawSeries(sources.kinomap, colorKinomap);
   }
+
+  layout = state.kinomap
+    ? { left, top, plotWidth, plotBottom: height - bottom, startMs: sources.startMs, endMs: sources.endMs, span }
+    : null;
+  if (layout) {
+    drawTrim(context, layout, trimWindow(layout.startMs, layout.endMs), {
+      shade: color("--chart-trim"), handle: color("--accent"), grip: color("--surface"),
+    });
+  }
+}
+
+function handleAt(clientX) {
+  if (!layout) return null;
+  const rect = elements.chart.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const trim = trimWindow(layout.startMs, layout.endMs);
+  const xFor = (ms) => layout.left + ((ms - layout.startMs) / layout.span) * layout.plotWidth;
+  const distances = [["start", Math.abs(x - xFor(trim.windowStart))], ["end", Math.abs(x - xFor(trim.windowEnd))]]
+    .sort((a, b) => a[1] - b[1]);
+  return distances[0][1] <= handleHitPx ? distances[0][0] : null;
+}
+
+// Dragging a handle writes whole seconds into the trim inputs, which stay the source of truth for the export.
+export function setupChartTrim(onChange) {
+  const canvas = elements.chart;
+  let dragging = null;
+  canvas.addEventListener("pointermove", (event) => {
+    if (!dragging) {
+      canvas.style.cursor = handleAt(event.clientX) ? "ew-resize" : "";
+      return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left - layout.left) / layout.plotWidth));
+    const ms = layout.startMs + ratio * layout.span;
+    const trim = trimWindow(layout.startMs, layout.endMs);
+    if (dragging === "start") {
+      const limit = trim.windowEnd - minimumWindowMs;
+      elements.trimStart.value = String(Math.max(0, Math.round((Math.min(ms, limit) - layout.startMs) / 1000)));
+    } else {
+      const limit = trim.windowStart + minimumWindowMs;
+      elements.trimEnd.value = String(Math.max(0, Math.round((layout.endMs - Math.max(ms, limit)) / 1000)));
+    }
+    onChange();
+  });
+  canvas.addEventListener("pointerdown", (event) => {
+    dragging = handleAt(event.clientX);
+    if (!dragging) return;
+    event.preventDefault();
+    canvas.setPointerCapture(event.pointerId);
+  });
+  const stop = (event) => {
+    if (!dragging) return;
+    dragging = null;
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+  };
+  canvas.addEventListener("pointerup", stop);
+  canvas.addEventListener("pointercancel", stop);
 }

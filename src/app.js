@@ -3,7 +3,7 @@ import { buildWorkout, decodeGarminFit, defaultLapDistance, estimateOffset, lapD
 import { buildBatchWorkout, planBatch } from "./batch.js";
 import { collectDirectoryFiles, fitFileName, titleFromKinomapFileName } from "./files.js";
 import { renderBatchTabs } from "./ui/batch.js";
-import { drawChart } from "./ui/chart.js";
+import { drawChart, setupChartTrim } from "./ui/chart.js";
 import {
   applyStaticTranslations, byId, displayNumber, elements, formatDuration, setNotice, sportLabel, state, t, translateMessage, zone,
 } from "./ui/context.js";
@@ -498,6 +498,7 @@ for (const button of document.querySelectorAll(".mode-button")) {
   });
 }
 
+setupChartTrim(render);
 const observer = new ResizeObserver(drawChart);
 observer.observe(elements.chart);
 setTheme(savedTheme(), false);

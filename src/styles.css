@@ -37,6 +37,7 @@
   --chart-grid: #e8edf4;
   --chart-label: #475569;
   --chart-subtle: #94a3b8;
+  --chart-trim: rgba(243, 245, 249, .78);
   --mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
   --num: "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
 }
@@ -72,6 +73,7 @@
   --chart-grid: #1e293b;
   --chart-label: #b4c0d4;
   --chart-subtle: #64748b;
+  --chart-trim: rgba(10, 15, 26, .72);
 }
 
 * { box-sizing: border-box; }
@@ -224,7 +226,8 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
 .chart-legend i { width: 14px; height: 3px; border-radius: 2px; }
 .legend-watch { background: var(--series-watch); }
 .legend-source { background: var(--series-source); }
-#comparisonChart { display: block; width: 100%; height: 360px; }
+#comparisonChart { display: block; width: 100%; height: 360px; touch-action: none; }
+.chart-hint { margin-left: 10px; color: var(--subtle); font-size: 12px; font-weight: 500; }
 .chart-axis { display: flex; justify-content: space-between; margin-top: 6px; color: var(--subtle); font-size: 11px; }
 
 /* Batch tabs */
