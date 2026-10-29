@@ -8,6 +8,8 @@ export const elements = {
   offset: byId("offsetInput"), alignmentMode: byId("alignmentMode"), trimStart: byId("trimStart"), trimEnd: byId("trimEnd"),
   sourcesPanel: byId("sourcesPanel"),
   sources: { heartRate: byId("sourceHeartRate"), power: byId("sourcePower"), cadence: byId("sourceCadence") },
+  timeZone: byId("timeZoneSelect"), zoneBadge: byId("zoneBadge"), footerZone: byId("footerZone"),
+  manualStartLabel: byId("manualStartLabel"),
   lapPreset: byId("lapPreset"), lapCustomField: byId("lapCustomField"), lapDistance: byId("lapDistance"), lapNote: byId("lapNote"),
   manualPanel: byId("manualDatePanel"), manualStart: byId("manualStart"), alignmentPanel: byId("alignmentPanel"),
   alignmentHint: byId("alignmentHint"), estimateNote: byId("estimateNote"), notice: byId("notice"), liveState: byId("liveState"),
@@ -32,7 +34,12 @@ export const state = {
   batch: null,
 };
 
-export const zone = "Europe/Prague";
+// Output time zone: reads timestamps without a zone, sets the FIT local time and every displayed clock.
+export let zone = "Europe/Prague";
+
+export function setZone(value) {
+  zone = value;
+}
 
 const locale = () => (state.language === "en" ? "en-GB" : "cs-CZ");
 
@@ -56,8 +63,8 @@ export const t = (key, values = {}) => Object.entries(values).reduce(
 export const sportLabel = (sport) => t(sport === "cycling" ? "cyclingIndoor" : sport === "running" ? "runningTreadmill" : "rowingIndoor");
 
 const knownMessages = {
-  "Čas v TCX nemá pásmo; vyložen jako Europe/Prague.": "timezoneTcx",
-  "Čas v PWX nemá pásmo; vyložen jako Europe/Prague.": "timezonePwx",
+  "Čas v TCX nemá pásmo; vyložen v pásmu výstupu.": "timezoneTcx",
+  "Čas v PWX nemá pásmo; vyložen v pásmu výstupu.": "timezonePwx",
   "Datum vypadá neplatně; zadejte místní začátek tréninku.": "invalidActivityDate",
   "TCX neobsahuje watty.": "noPower",
   "Po zarovnání a ořezu nezůstal společný časový úsek.": "estimateNoOverlap",
@@ -71,7 +78,7 @@ const knownMessages = {
 };
 
 export function translateMessage(message) {
-  if (knownMessages[message]) return t(knownMessages[message]);
+  if (knownMessages[message]) return t(knownMessages[message], { zone });
   if (message.startsWith("FIT nelze načíst: ")) return t("fitRead", { message: message.slice("FIT nelze načíst: ".length) });
   if (message.startsWith("TCX: ")) return t("needRecords", { label: "TCX" });
   if (message.startsWith("PWX: ")) return t("needRecords", { label: "PWX" });

@@ -1,4 +1,4 @@
-import { byId, sportLabel, state, t } from "./context.js";
+import { byId, sportLabel, state, t, zone } from "./context.js";
 
 const panel = byId("batchPanel");
 const tabs = byId("batchTabs");
@@ -8,7 +8,7 @@ const exportButton = byId("batchExportButton");
 function shortDate(epochMs) {
   if (!Number.isFinite(epochMs)) return "—";
   return new Intl.DateTimeFormat(state.language === "en" ? "en-GB" : "cs-CZ", {
-    timeZone: "Europe/Prague", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit",
+    timeZone: zone, day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit",
   }).format(new Date(epochMs));
 }
 

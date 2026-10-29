@@ -23,6 +23,27 @@ export function savedTheme() {
   }
 }
 
+export function systemZone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Prague";
+}
+
+export function savedZone() {
+  try {
+    const saved = localStorage.getItem("kinomap-fit-zone");
+    // An unknown zone would make Intl throw; fall back to the system one.
+    if (saved) new Intl.DateTimeFormat("en", { timeZone: saved });
+    return saved || systemZone();
+  } catch {
+    return systemZone();
+  }
+}
+
+export function persistZone(value) {
+  try {
+    localStorage.setItem("kinomap-fit-zone", value);
+  } catch {}
+}
+
 export function savedLanguage() {
   try {
     return localStorage.getItem("kinomap-fit-language") === "en" ? "en" : "cs";

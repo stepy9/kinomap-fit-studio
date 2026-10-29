@@ -108,7 +108,7 @@ export function parseKinomap(xml, options = {}) {
     return {
       ...profile, sourceType: "PWX", startMs, records: normalizedCadence(validated(records, "PWX"), profile.sport), calories: null,
       dateHasZone: parsedStart.hasZone,
-      warnings: parsedStart.hasZone ? [] : ["Čas v PWX nemá pásmo; vyložen jako Europe/Prague."],
+      warnings: parsedStart.hasZone ? [] : ["Čas v PWX nemá pásmo; vyložen v pásmu výstupu."],
     };
   }
 
@@ -151,7 +151,7 @@ export function parseKinomap(xml, options = {}) {
   const year = Number.isFinite(parsedStart.epochMs) ? new Date(parsedStart.epochMs).getUTCFullYear() : NaN;
   const needsManualStart = !Number.isFinite(parsedStart.epochMs) || year < 2000 || year > new Date().getUTCFullYear() + 1;
   const warnings = [];
-  if (!parsedStart.hasZone) warnings.push("Čas v TCX nemá pásmo; vyložen jako Europe/Prague.");
+  if (!parsedStart.hasZone) warnings.push("Čas v TCX nemá pásmo; vyložen v pásmu výstupu.");
   if (needsManualStart && adjustedStart == null) warnings.push("Datum vypadá neplatně; zadejte místní začátek tréninku.");
   if (!records.some((record) => record.power != null)) warnings.push("TCX neobsahuje watty.");
 

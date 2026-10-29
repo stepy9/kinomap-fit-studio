@@ -172,7 +172,9 @@ test("interprets timezone-less timestamps in Europe/Prague with DST", () => {
   const parsed = parseKinomap(xml);
   assert.equal(new Date(parsed.startMs).toISOString(), "2026-07-01T10:00:00.000Z");
   assert.equal(parsed.dateHasZone, false);
-  assert.match(parsed.warnings[0], /Europe\/Prague/);
+  assert.match(parsed.warnings[0], /pásmu výstupu/);
+  const newYork = parseKinomap(xml, { timeZone: "America/New_York" });
+  assert.equal(new Date(newYork.startMs).toISOString(), "2026-07-01T16:00:00.000Z");
 });
 
 test("keeps invalid TCX dates available for a manual start-time correction", () => {

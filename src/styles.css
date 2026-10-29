@@ -210,8 +210,6 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
 .advanced summary:hover { color: var(--ink); }
 .advanced[open] summary { padding-bottom: 16px; }
 .advanced .panel { padding-top: 0; border-top: 0; }
-.zone-row { display: flex; align-items: center; gap: 10px; padding-top: 4px; color: var(--muted); font-size: 12px; }
-.zone-row strong { margin-left: auto; color: var(--ink); font-weight: 600; }
 .zone-badge { padding: 3px 8px; border-radius: 999px; color: var(--muted); background: var(--surface-2); box-shadow: 0 0 0 1px var(--line) inset; font-size: 11px; }
 
 /* Preview */

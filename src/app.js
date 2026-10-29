@@ -6,10 +6,10 @@ import { collectDirectoryFiles, fitFileName, titleFromKinomapFileName } from "./
 import { renderBatchTabs } from "./ui/batch.js";
 import { drawChart, setupChartTrim } from "./ui/chart.js";
 import {
-  applyStaticTranslations, byId, displayNumber, elements, formatDuration, setNotice, sportLabel, state, t, timeRange, translateMessage, zone,
+  applyStaticTranslations, byId, displayNumber, elements, formatDuration, setNotice, sportLabel, state, t, timeRange, translateMessage, setZone, zone,
 } from "./ui/context.js";
 import { exportFit, saveFit } from "./ui/export.js";
-import { savedLanguage, savedTheme, setLanguageMenu, setTheme } from "./ui/preferences.js";
+import { persistZone, savedLanguage, savedTheme, savedZone, setLanguageMenu, setTheme, systemZone } from "./ui/preferences.js";
 
 function lapLabel(meters) {
   if (Math.abs(meters - 1609.344) < 1) return "1 mi";
@@ -48,6 +48,7 @@ function setLanguage(language, persist = true) {
     elements.activityName.value = `Kinomap - ${t("fallbackActivity")}`;
   }
   if (state.estimate) updateEstimateNote();
+  renderZone();
   if (persist) {
     try {
       localStorage.setItem("kinomap-fit-language", state.language);
@@ -96,6 +97,39 @@ function applySettings(settings) {
     elements.manualStart.value = settings.manualStart;
     parseCurrentKinomap(true);
   }
+}
+
+// "UTC+1 / UTC+2" for a zone with daylight saving, otherwise one offset.
+function zoneOffsets(timeZone) {
+  const year = new Date().getUTCFullYear();
+  const offsets = [Date.UTC(year, 0, 15), Date.UTC(year, 6, 15)].map((ms) => new Intl.DateTimeFormat("en", {
+    timeZone, timeZoneName: "shortOffset",
+  }).formatToParts(new Date(ms)).find((part) => part.type === "timeZoneName").value.replace("GMT", "UTC"));
+  return [...new Set(offsets)].map((offset) => (offset === "UTC" ? "UTC±0" : offset)).join(" / ");
+}
+
+function renderZone() {
+  const select = elements.timeZone;
+  if (!select.options.length) {
+    const zones = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
+    for (const value of new Set([systemZone(), zone, ...zones])) select.add(new Option(value.replaceAll("_", " "), value));
+  }
+  select.options[0].textContent = `${systemZone().replaceAll("_", " ")} · ${t("systemZone")}`;
+  select.value = zone;
+  elements.zoneBadge.textContent = zoneOffsets(zone);
+  elements.footerZone.textContent = zone;
+  elements.manualStartLabel.textContent = t("manualStart", { zone });
+}
+
+// Times without a zone are read again in the new one, so the open activity and every folder tab follow it.
+function changeZone(value) {
+  setZone(value);
+  persistZone(value);
+  for (const item of state.batch?.items ?? []) item.timeZone = value;
+  renderZone();
+  parseCurrentKinomap();
+  renderBatch();
+  render();
 }
 
 function activeBatchItem() {
@@ -466,6 +500,7 @@ elements.lapPreset.addEventListener("change", () => {
   render();
 });
 elements.activityName.addEventListener("input", render);
+elements.timeZone.addEventListener("change", () => changeZone(elements.timeZone.value));
 for (const select of Object.values(elements.sources)) select.addEventListener("change", render);
 byId("autoOffsetButton").addEventListener("click", offsetEstimate);
 elements.export.addEventListener("click", exportFit);
@@ -536,5 +571,6 @@ setupChartTrim(render);
 const observer = new ResizeObserver(drawChart);
 observer.observe(elements.chart);
 setTheme(savedTheme(), false);
+setZone(savedZone());
 setLanguage(savedLanguage(), false);
 render();
