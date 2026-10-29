@@ -1,4 +1,5 @@
 // Plans a folder of Kinomap recordings as separate activities, each paired with its own watch FIT when one overlaps it.
+import { defaultZoneFor } from "./zones.js";
 import { buildWorkout, decodeGarminFit, estimateOffset, parseKinomap } from "./core.js";
 import { checkWorkout } from "./checks.js";
 import { titleFromKinomapFileName } from "./files.js";
@@ -59,6 +60,7 @@ export async function planBatch(files, { timeZone = "Europe/Prague", fallbackTit
         needsManualStart: Boolean(kinomap.needsManualStart),
         fitFile: watch?.file ?? null,
         fit: watch?.fit ?? null,
+        timeZone: defaultZoneFor(watch?.fit, timeZone),
         exported: nearby.some((candidate) => candidate.exported),
       });
       // Check the default export up front so problem activities stand out before their tab is opened.
@@ -78,6 +80,8 @@ export async function planBatch(files, { timeZone = "Europe/Prague", fallbackTit
 
 // Settings left untouched in the UI fall back to the defaults a single export would use.
 export function buildBatchWorkout(item, settings = {}) {
+  // A zone picked by hand applies to this activity only.
+  if (settings.zoneChoice) item = { ...item, timeZone: settings.zoneChoice };
   const kinomap = parseBatchKinomap(item, settings.manualStart || undefined);
   if (kinomap.needsManualStart && !settings.manualStart) throw new Error("Datum vypadá neplatně; zadejte místní začátek tréninku.");
   const fit = settings.mode === "convert" ? null : item.fit;

@@ -32,6 +32,8 @@ export const state = {
   error: null,
   // Activities found in a chosen folder, shown as preview tabs: { items, activeId, busy }.
   batch: null,
+  // Zone picked by hand for the open activity; null follows the watch or the computer.
+  zoneChoice: null,
 };
 
 // Output time zone: reads timestamps without a zone, sets the FIT local time and every displayed clock.
@@ -89,6 +91,7 @@ export function translateMessage(message) {
 export function applyStaticTranslations() {
   for (const element of document.querySelectorAll("[data-i18n]")) element.textContent = t(element.dataset.i18n);
   for (const element of document.querySelectorAll("[data-i18n-aria]")) element.setAttribute("aria-label", t(element.dataset.i18nAria));
+  for (const element of document.querySelectorAll("[data-i18n-title]")) element.title = t(element.dataset.i18nTitle);
 }
 
 export function setNotice(text = "", type = "") {

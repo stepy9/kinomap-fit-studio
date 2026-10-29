@@ -36,7 +36,13 @@ export function decodeGarminFit(input) {
     power: Number.isFinite(record.power) ? record.power : null,
   })).filter((record) => Number.isFinite(record.timeMs)).sort((a, b) => a.timeMs - b.timeMs);
   if (records.length < 2) throw new Error("FIT: potřebuji alespoň dva časové záznamy.");
+  // The watch stores its local time as raw seconds since the FIT epoch; the difference is its UTC offset.
+  const activity = messages.activityMesgs?.[0];
+  const utcOffsetMinutes = typeof activity?.localTimestamp === "number" && activity.timestamp instanceof Date
+    ? Math.round(((activity.localTimestamp + 631065600) * 1000 - activity.timestamp.getTime()) / 900_000) * 15
+    : null;
   return {
+    utcOffsetMinutes,
     records,
     startMs: records[0].timeMs,
     endMs: records.at(-1).timeMs,
