@@ -396,3 +396,20 @@ test("ignores route altitude for rowing", () => {
   assert.equal(roundTrip(rowing.fitBytes).sessionMesgs[0].totalAscent, undefined);
   assert.equal(buildWorkout({ ...kinomap, sport: "cycling", subSport: "indoorCycling" }).summary.ascent, 8);
 });
+
+test("takes each merged metric from the chosen source and fills gaps from the other", () => {
+  const fixture = fixtures.find((item) => item.sport === "running");
+  const kinomap = fixtureKinomap(fixture);
+  const fit = fixtureFit(fixture);
+  const options = { offsetSeconds: fixtureOffsetSeconds };
+  const byDefault = buildWorkout(kinomap, fit, options);
+  const fromWatch = buildWorkout(kinomap, fit, { ...options, sources: { heartRate: "watch", cadence: "watch" } });
+  const middle = byDefault.records.length >> 1;
+  const watchRecord = fit.records.find((record) => record.timeMs === fromWatch.records[middle].timeMs);
+  const kinomapRecord = kinomap.records.find((record) => record.timeMs === watchRecord.timeMs - fixtureOffsetSeconds * 1000);
+  assert.equal(byDefault.records[middle].heartRate, kinomapRecord.heartRate);
+  assert.equal(byDefault.records[middle].cadence, kinomapRecord.cadence);
+  assert.equal(fromWatch.records[middle].heartRate, watchRecord.heartRate);
+  // The running watch stores cadence per leg, the workout keeps steps/min.
+  assert.equal(fromWatch.records[middle].cadence, watchRecord.cadence * 2);
+});

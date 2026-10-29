@@ -90,6 +90,7 @@ export function buildBatchWorkout(item, settings = {}) {
     trimStartSeconds: settings.trimStartSeconds,
     trimEndSeconds: settings.trimEndSeconds,
     lapDistanceMeters: settings.lapDistanceMeters,
+    sources: settings.sources,
     activityName: settings.activityName ?? `Kinomap - ${item.title}`,
   });
 }

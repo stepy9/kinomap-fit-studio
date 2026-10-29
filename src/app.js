@@ -1,5 +1,5 @@
 import "./styles.css";
-import { buildWorkout, decodeGarminFit, defaultLapDistance, estimateOffset, lapDistancePresets, parseKinomap } from "./core.js";
+import { buildWorkout, decodeGarminFit, defaultLapDistance, defaultMetricSources, estimateOffset, lapDistancePresets, parseKinomap } from "./core.js";
 import { buildBatchWorkout, planBatch } from "./batch.js";
 import { checkWorkout } from "./checks.js";
 import { collectDirectoryFiles, fitFileName, titleFromKinomapFileName } from "./files.js";
@@ -57,6 +57,14 @@ function setLanguage(language, persist = true) {
   render();
 }
 
+function metricSources() {
+  return Object.fromEntries(Object.entries(elements.sources).map(([field, select]) => [field, select.value]));
+}
+
+function setMetricSources(sources = defaultMetricSources) {
+  for (const [field, select] of Object.entries(elements.sources)) select.value = sources[field] ?? defaultMetricSources[field];
+}
+
 // Each folder activity keeps its own editor settings while the user switches between preview tabs.
 function currentSettings() {
   return {
@@ -68,6 +76,7 @@ function currentSettings() {
     lapPreset: elements.lapPreset.value,
     customLapDistance: elements.lapDistance.value,
     lapDistanceMeters: lapDistanceValue(),
+    sources: metricSources(),
     activityName: elements.activityName.value,
     manualStart: elements.manualStart.value || undefined,
   };
@@ -82,6 +91,7 @@ function applySettings(settings) {
   renderLapOptions(state.kinomap?.sport, settings.lapPreset);
   elements.lapDistance.value = settings.customLapDistance;
   elements.activityName.value = settings.activityName;
+  setMetricSources(settings.sources);
   if (settings.manualStart) {
     elements.manualStart.value = settings.manualStart;
     parseCurrentKinomap(true);
@@ -269,6 +279,7 @@ function updateModeButtons() {
     button.setAttribute("aria-selected", String(active));
   }
   elements.alignmentPanel.hidden = state.mode !== "merge";
+  elements.sourcesPanel.hidden = state.mode !== "merge";
 }
 
 function renderSummary(summary, startMs, endMs, sport) {
@@ -370,6 +381,7 @@ function render() {
           trimStartSeconds: elements.trimStart.value,
           trimEndSeconds: elements.trimEnd.value,
           lapDistanceMeters: lapDistanceValue(),
+          sources: metricSources(),
           activityName: elements.activityName.value,
         },
       );
@@ -454,6 +466,7 @@ elements.lapPreset.addEventListener("change", () => {
   render();
 });
 elements.activityName.addEventListener("input", render);
+for (const select of Object.values(elements.sources)) select.addEventListener("change", render);
 byId("autoOffsetButton").addEventListener("click", offsetEstimate);
 elements.export.addEventListener("click", exportFit);
 byId("batchExportButton").addEventListener("click", exportBatch);

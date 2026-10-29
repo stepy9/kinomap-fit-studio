@@ -187,6 +187,7 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
 .panel-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .alignment-hint, .field-unit, .estimate-note { overflow: hidden; color: var(--subtle); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.metric-source-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .alignment-grid { grid-template-columns: minmax(0, 1fr) 110px; }
 .field { display: grid; gap: 6px; min-width: 0; }
 .field > span { color: var(--muted); font-size: 12px; font-weight: 600; }

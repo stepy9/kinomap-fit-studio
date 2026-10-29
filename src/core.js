@@ -354,6 +354,9 @@ function lapsFor(records, lapDistance, calories, timerSeconds, sport) {
   });
 }
 
+// Which recording each merged metric comes from (Kinomap reads the trainer and relays the strap); the other one fills the moments the chosen one lacks.
+export const defaultMetricSources = { heartRate: "kinomap", power: "kinomap", cadence: "kinomap" };
+
 export function buildWorkout(kinomap, fit = null, options = {}) {
   const timeZone = options.timeZone ?? "Europe/Prague";
   const alignmentMode = options.alignmentMode ?? "absolute";
@@ -372,14 +375,21 @@ export function buildWorkout(kinomap, fit = null, options = {}) {
     startMs = Math.max(kinomap.records[0].timeMs + baseShift + offsetMs, fit.records[0].timeMs) + trimStartMs;
     endMs = Math.min(kinomap.records.at(-1).timeMs + baseShift + offsetMs, fit.records.at(-1).timeMs) - trimEndMs;
     if (endMs <= startMs) throw new Error("Po zarovnání a ořezu nezůstal společný časový úsek.");
+    const sources = { ...defaultMetricSources, ...options.sources };
+    // Watch FIT stores running cadence per leg; workout records keep steps/min.
+    const watchCadenceScale = kinomap.sport === "running" ? 2 : 1;
     records = fit.records.filter((record) => record.timeMs >= startMs && record.timeMs <= endMs).map((watch) => {
       const kinomapTime = watch.timeMs - baseShift - offsetMs;
+      const pick = (field, watchValue) => {
+        const fromKinomap = interpolate(kinomap.records, kinomapTime, field);
+        return sources[field] === "watch" ? watchValue ?? fromKinomap : fromKinomap ?? watchValue;
+      };
       return {
         timeMs: watch.timeMs,
         distance: interpolate(kinomap.records, kinomapTime, "distance"),
-        heartRate: watch.heartRate ?? interpolate(kinomap.records, kinomapTime, "heartRate"),
-        cadence: interpolate(kinomap.records, kinomapTime, "cadence"),
-        power: interpolate(kinomap.records, kinomapTime, "power"),
+        heartRate: pick("heartRate", watch.heartRate),
+        cadence: pick("cadence", watch.cadence == null ? null : watch.cadence * watchCadenceScale),
+        power: pick("power", watch.power),
         speed: interpolate(kinomap.records, kinomapTime, "speed") ?? watch.speed,
         altitude: interpolate(kinomap.records, kinomapTime, "altitude"),
       };
