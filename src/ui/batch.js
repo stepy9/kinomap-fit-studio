@@ -5,6 +5,7 @@ const tabs = byId("batchTabs");
 const note = byId("batchNote");
 const exportButton = byId("batchExportButton");
 const folderExportButton = byId("batchFolderExportButton");
+const applyButton = byId("batchApplyButton");
 
 function shortDate(epochMs) {
   if (!Number.isFinite(epochMs)) return "—";
@@ -63,6 +64,10 @@ export function renderBatchTabs({ onSelect, onToggle }) {
   // Saving everything into one chosen folder needs the File System Access API, so desktop Chromium only.
   folderExportButton.hidden = typeof window.showDirectoryPicker !== "function";
   folderExportButton.disabled = exportButton.disabled;
+  // Applying copies the open activity's settings to the other selected ones.
+  const others = batch.items.filter((item) => item.selected && item.id !== batch.activeId).length;
+  applyButton.textContent = t("batchApply", { count: others });
+  applyButton.disabled = !others || batch.busy;
   exportButton.textContent = t("batchExport", { count: selected });
   folderExportButton.textContent = t("batchToFolder", { count: selected });
 }

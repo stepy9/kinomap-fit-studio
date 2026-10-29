@@ -2,14 +2,14 @@ import "./styles.css";
 import { buildWorkout, decodeGarminFit, defaultFeel, defaultLapDistance, defaultMetricSources, estimateOffset, lapDistancePresets, parseKinomap } from "./core.js";
 import { buildBatchWorkout, planBatch } from "./batch.js";
 import { checkWorkout } from "./checks.js";
-import { collectDirectoryFiles, fitFileName, titleFromKinomapFileName } from "./files.js";
+import { collectDirectoryFiles, fitFileName, kinomapExportKey, titleFromKinomapFileName } from "./files.js";
 import { renderBatchTabs } from "./ui/batch.js";
 import { drawChart, isTrimMode, setTrimMode, setupChartLegend, setupChartTrim } from "./ui/chart.js";
 import {
   applyStaticTranslations, byId, displayNumber, elements, formatDuration, setNotice, sportLabel, state, t, timeRange, translateMessage, setZone, zone,
 } from "./ui/context.js";
 import { exportFit, saveFit } from "./ui/export.js";
-import { saveDefaults, savedDefaults, savedLanguage, savedTheme, setLanguageMenu, setTheme } from "./ui/preferences.js";
+import { exportedKeys, rememberExport, saveDefaults, savedDefaults, savedLanguage, savedTheme, setLanguageMenu, setTheme } from "./ui/preferences.js";
 import { allZones, defaultZoneFor, offsetLabel, systemZone, zoneOffsetMinutes } from "./zones.js";
 
 function lapLabel(meters) {
@@ -305,10 +305,41 @@ async function selectBatchItem(item) {
   renderBatch();
   await loadKinomap(item.kinomapFile, item.directoryHandle, { keepBatch: true });
   if (item.fitFile) await loadFit(item.fitFile);
-  if (item.settings) {
-    applySettings(item.settings);
-    render();
+  const { overrides } = item;
+  if (item.settings) applySettings(item.settings);
+  // Settings applied from another tab show up here and become part of this tab's own settings.
+  if (overrides) {
+    applySharedSettings(overrides);
+    delete item.overrides;
   }
+  if (item.settings || overrides) render();
+}
+
+// Lap distance, data sources, feel and effort: what "Apply settings to selected" copies.
+function sharedSettings() {
+  const settings = currentSettings();
+  return {
+    lapPreset: settings.lapPreset, customLapDistance: settings.customLapDistance, lapDistanceMeters: settings.lapDistanceMeters,
+    sources: settings.sources, workoutFeel: settings.workoutFeel, workoutRpe: settings.workoutRpe,
+  };
+}
+
+function applySharedSettings(shared) {
+  renderLapOptions(state.kinomap?.sport, shared.lapPreset);
+  elements.lapDistance.value = shared.customLapDistance;
+  elements.lapCustomField.hidden = elements.lapPreset.value !== "custom";
+  setMetricSources(shared.sources);
+  setFeel(shared);
+}
+
+function applyToSelected() {
+  const shared = sharedSettings();
+  const targets = state.batch.items.filter((item) => item.selected && item.id !== state.batch.activeId);
+  for (const item of targets) {
+    if (item.settings) Object.assign(item.settings, shared);
+    else item.overrides = shared;
+  }
+  setNotice(t("batchApplied", { count: targets.length }), "success");
 }
 
 async function exportBatchToFolder() {
@@ -331,9 +362,10 @@ async function exportBatch(targetDirectory = null) {
     item.status = "saving";
     renderBatch();
     try {
-      const workout = buildBatchWorkout(item, item.settings ?? rememberedSettings(item.sport));
+      const workout = buildBatchWorkout(item, { ...(item.settings ?? rememberedSettings(item.sport)), ...item.overrides });
       const { saved } = await saveFit(workout.fitBytes, fitFileName(workout.activityName, t("fallbackActivity")), targetDirectory ?? item.directoryHandle);
       counts[saved ? "saved" : "downloaded"] += 1;
+      rememberExport(kinomapExportKey(item.kinomapFile.name));
       Object.assign(item, { status: null, failure: null, exported: true, selected: false });
     } catch (error) {
       counts.failed += 1;
@@ -635,7 +667,7 @@ function render() {
 }
 
 async function loadFolder(files) {
-  const items = await planBatch(files, { timeZone: systemZone(), fallbackTitle: t("fallbackActivity") });
+  const items = await planBatch(files, { timeZone: systemZone(), fallbackTitle: t("fallbackActivity"), exportedKeys: exportedKeys() });
   const first = items.find((item) => !item.error);
   if (!first) {
     setNotice(t("noFolderKinomap"), "error");
@@ -720,6 +752,7 @@ byId("autoOffsetButton").addEventListener("click", offsetEstimate);
 elements.export.addEventListener("click", exportFit);
 byId("batchExportButton").addEventListener("click", () => exportBatch());
 byId("batchFolderExportButton").addEventListener("click", exportBatchToFolder);
+byId("batchApplyButton").addEventListener("click", applyToSelected);
 elements.lightThemeButton.addEventListener("click", () => setTheme("light"));
 elements.darkThemeButton.addEventListener("click", () => setTheme("dark"));
 elements.languageButton.addEventListener("click", () => setLanguageMenu(elements.languageMenu.hidden));

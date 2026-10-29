@@ -2,7 +2,7 @@
 import { defaultZoneFor } from "./zones.js";
 import { buildWorkout, decodeGarminFit, estimateOffset, parseKinomap } from "./core.js";
 import { checkWorkout } from "./checks.js";
-import { titleFromKinomapFileName } from "./files.js";
+import { kinomapExportKey, titleFromKinomapFileName } from "./files.js";
 
 // A watch recording counts as the same activity when it overlaps the Kinomap one, allowing this much clock skew.
 const pairingToleranceMs = 15 * 60 * 1000;
@@ -37,7 +37,8 @@ export function parseBatchKinomap(item, manualStart) {
   return parseKinomap(item.kinomapText, { fallbackStartMs: item.kinomapFile.lastModified || Date.now(), timeZone: item.timeZone, manualStart });
 }
 
-export async function planBatch(files, { timeZone = "Europe/Prague", fallbackTitle = "Kinomap" } = {}) {
+// exportedKeys lists recordings exported earlier wherever the FIT went, as kinomapExportKey gives them.
+export async function planBatch(files, { timeZone = "Europe/Prague", fallbackTitle = "Kinomap", exportedKeys = new Set() } = {}) {
   const all = [...files];
   const fits = await decodedFits(all);
   const items = await Promise.all(kinomapSources(all).map(async ([id, kinomapFile]) => {
@@ -61,7 +62,7 @@ export async function planBatch(files, { timeZone = "Europe/Prague", fallbackTit
         fitFile: watch?.file ?? null,
         fit: watch?.fit ?? null,
         timeZone: defaultZoneFor(watch?.fit, timeZone),
-        exported: nearby.some((candidate) => candidate.exported),
+        exported: nearby.some((candidate) => candidate.exported) || exportedKeys.has(kinomapExportKey(kinomapFile.name)),
       });
       // Check the default export up front so problem activities stand out before their tab is opened.
       if (!item.needsManualStart) {

@@ -1,5 +1,6 @@
-import { fitFileName } from "../files.js";
+import { fitFileName, kinomapExportKey } from "../files.js";
 import { elements, setNotice, state, t } from "./context.js";
+import { rememberExport } from "./preferences.js";
 
 function downloadFit(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -44,6 +45,7 @@ export async function exportFit() {
   if (state.outputDirectoryHandle) setNotice(t("savingBesideFiles"));
   try {
     const { saved, fallbackMessage } = await saveFit(state.result.fitBytes, filename, state.outputDirectoryHandle);
+    rememberExport(kinomapExportKey(state.kinomapFile?.name));
     if (saved) setNotice(t("savedBesideFiles"), "success");
     else if (fallbackMessage) setNotice(t("saveFallbackStarted", { message: fallbackMessage }));
     else setNotice(t("downloadStarted", { filename }), "success");

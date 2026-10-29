@@ -40,6 +40,26 @@ export function saveDefaults(patch) {
   } catch {}
 }
 
+// Recordings already exported, kept by browser so an export into another folder still counts.
+const exportsKey = "kinomap-fit-exports";
+const exportsLimit = 2000;
+
+export function exportedKeys() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(exportsKey)) ?? []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function rememberExport(key) {
+  if (!key) return;
+  try {
+    const keys = [...exportedKeys()].filter((existing) => existing !== key);
+    localStorage.setItem(exportsKey, JSON.stringify([...keys, key].slice(-exportsLimit)));
+  } catch {}
+}
+
 export function savedLanguage() {
   try {
     return localStorage.getItem("kinomap-fit-language") === "en" ? "en" : "cs";

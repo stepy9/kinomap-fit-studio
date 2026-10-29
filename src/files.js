@@ -27,6 +27,12 @@ export function titleFromKinomapFileName(name) {
     .trim();
 }
 
+// Identifies a Kinomap recording across folders: its activity number, or the file name without one.
+export function kinomapExportKey(fileName) {
+  const name = String(fileName ?? "");
+  return name.match(/--(\d+)\.(tcx|pwx)$/i)?.[1] ?? name.replace(/\.(tcx|pwx)$/i, "");
+}
+
 export function fitFileName(activityName, fallback) {
   const safeName = String(activityName ?? "")
     .trim()

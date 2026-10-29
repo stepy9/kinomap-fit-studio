@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { buildBatchWorkout, planBatch } from "../src/batch.js";
 import { buildWorkout, parseKinomap } from "../src/core.js";
-import { fitFileName, titleFromKinomapFileName } from "../src/files.js";
+import { fitFileName, kinomapExportKey, titleFromKinomapFileName } from "../src/files.js";
 
 const fixture = (sport, name) => path.resolve("test", "fixtures", sport, name);
 
@@ -74,4 +74,13 @@ test("exports each planned activity with defaults or its own edited settings", a
   assert.equal(edited.mode, "convert");
   assert.equal(edited.lapDistance, 400);
   assert.equal(edited.activityName, "Kinomap - Tempo");
+});
+
+test("remembers an export by its Kinomap activity number, wherever the FIT went", async () => {
+  assert.equal(kinomapExportKey("1xMer Sunset P2--26363034.tcx"), "26363034");
+  assert.equal(kinomapExportKey("activity.pwx"), "activity");
+  const items = await planBatch([fixtureFile("rowing", "activity.tcx"), fixtureFile("cycling", "activity.tcx")], {
+    exportedKeys: new Set(["activity"]),
+  });
+  assert.ok(items.every((item) => item.exported && !item.selected));
 });
