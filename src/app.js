@@ -61,7 +61,7 @@ function displayNumber(value, digits = 0) {
 }
 
 function resetSummary() {
-  for (const id of ["summaryDuration", "summaryDistance", "summaryCalories", "summaryHeartRate", "summaryPower", "summaryCadence"]) {
+  for (const id of ["summaryDuration", "summaryDistance", "summaryCalories", "summaryHeartRate", "summaryPower", "summaryCadence", "summarySpeed"]) {
     byId(id).textContent = "—";
   }
   elements.startStamp.textContent = "—";
@@ -73,7 +73,7 @@ function updateFileRows() {
   elements.fitName.textContent = state.fitFile?.name ?? "Přetáhněte FIT";
   elements.fitName.classList.toggle("has-file", Boolean(state.fitFile));
   elements.kinomapDetail.textContent = state.kinomap
-    ? `${state.kinomap.records.length.toLocaleString("cs-CZ")} záznamů · ${state.kinomap.sourceType} · ${state.kinomap.calories == null ? "odhad kalorií" : `${state.kinomap.calories} kcal`}`
+    ? `${state.kinomap.records.length.toLocaleString("cs-CZ")} záznamů · ${state.kinomap.sportLabel} · ${state.kinomap.calories == null ? "odhad kalorií" : `${state.kinomap.calories} kcal`}`
     : "Watty · záběry · metry · tep";
   elements.fitDetail.textContent = state.fit
     ? `${state.fit.records.length.toLocaleString("cs-CZ")} záznamů · ${state.fit.sessions[0]?.sportProfileName ?? "tepová data"}`
@@ -159,7 +159,7 @@ function updateModeButtons() {
   elements.alignmentPanel.hidden = state.mode !== "merge";
 }
 
-function renderSummary(summary, startMs) {
+function renderSummary(summary, startMs, sport) {
   byId("summaryDuration").textContent = formatDuration(summary.durationSeconds);
   byId("summaryDistance").textContent = `${displayNumber(summary.distance / 1000, 2)} km`;
   byId("summaryCalories").textContent = `${displayNumber(summary.calories)} kcal`;
@@ -168,7 +168,20 @@ function renderSummary(summary, startMs) {
   byId("summaryPower").textContent = summary.avgPower == null
     ? "—" : `${displayNumber(summary.avgPower)} / ${displayNumber(summary.maxPower)} W`;
   byId("summaryCadence").textContent = summary.avgCadence == null
-    ? "—" : `${displayNumber(summary.avgCadence)} / ${displayNumber(summary.maxCadence)} spm`;
+    ? "—" : `${displayNumber(summary.avgCadence)} / ${displayNumber(summary.maxCadence)} ${sport === "cycling" ? "rpm" : "spm"}`;
+  const speedLabel = byId("summarySpeedLabel");
+  const speedValue = byId("summarySpeed");
+  if (summary.avgSpeed == null || summary.avgSpeed <= 0) {
+    speedLabel.textContent = "Rychlost / tempo";
+    speedValue.textContent = "—";
+  } else if (sport === "cycling") {
+    speedLabel.textContent = "Průměrná rychlost";
+    speedValue.textContent = `${displayNumber(summary.avgSpeed * 3.6, 1)} km/h`;
+  } else {
+    const secondsPerUnit = 1000 / summary.avgSpeed / (sport === "rowing" ? 2 : 1);
+    speedLabel.textContent = "Průměrné tempo";
+    speedValue.textContent = `${formatDuration(secondsPerUnit)} ${sport === "rowing" ? "/500 m" : "min/km"}`;
+  }
   elements.startStamp.textContent = displayDate.format(new Date(startMs));
 }
 
@@ -203,7 +216,7 @@ function render() {
           activityName: elements.activityName.value,
         },
       );
-      renderSummary(state.result.summary, state.result.startMs);
+      renderSummary(state.result.summary, state.result.startMs, state.result.sport);
       elements.export.disabled = false;
       elements.liveState.classList.add("is-ready");
       elements.liveState.lastChild.textContent = "Připraveno";
@@ -246,10 +259,14 @@ function drawChart() {
   context.clearRect(0, 0, width, height);
 
   const sources = chartSources();
+  const running = state.kinomap?.sport === "running";
+  const cadenceMax = state.kinomap?.sport === "cycling" ? 140 : running ? 220 : 60;
   const lanes = [
     { key: "heartRate", title: "TEP", unit: "bpm", min: 40, max: 200 },
-    { key: "power", title: "VÝKON", unit: "W", min: 0, max: 400 },
-    { key: "cadence", title: "ZÁBĚRY", unit: "spm", min: 0, max: 60 },
+    running
+      ? { key: "speed", title: "RYCHLOST", unit: "km/h", min: 0, max: 18, scale: 3.6 }
+      : { key: "power", title: "VÝKON", unit: "W", min: 0, max: 400 },
+    { key: "cadence", title: "KADENCE", unit: state.kinomap?.sport === "cycling" ? "rpm" : "spm", min: 0, max: cadenceMax },
   ];
   const left = 43;
   const right = 10;
@@ -266,11 +283,14 @@ function drawChart() {
     const lane = lanes[laneIndex];
     const laneTop = top + laneIndex * (laneHeight + laneGap);
     const laneBottom = laneTop + laneHeight;
+    const scaleValue = (record) => record[lane.key] * (lane.scale ?? 1);
     const sourceValues = [
       ...sources.kinomap.map((record) => record[lane.key]),
       ...sources.fit.map((record) => record[lane.key]),
-    ].filter(Number.isFinite);
-    const maximum = lane.key === "power" && sourceValues.length ? Math.max(lane.max, Math.max(...sourceValues) * 1.08) : lane.max;
+    ].filter(Number.isFinite).map((value) => value * (lane.scale ?? 1));
+    const maximum = (lane.key === "power" || lane.key === "speed") && sourceValues.length
+      ? Math.max(lane.max, Math.max(...sourceValues) * 1.08)
+      : lane.max;
 
     context.strokeStyle = "#e1e7df";
     context.lineWidth = 1;
@@ -297,11 +317,12 @@ function drawChart() {
       let active = false;
       let previousTime = null;
       for (const record of records) {
-        const value = record[lane.key];
-        if (!Number.isFinite(value) || record.chartTime < sources.startMs || record.chartTime > sources.endMs) {
+        const rawValue = record[lane.key];
+        if (!Number.isFinite(rawValue) || record.chartTime < sources.startMs || record.chartTime > sources.endMs) {
           active = false;
           continue;
         }
+        const value = rawValue * (lane.scale ?? 1);
         const x = left + ((record.chartTime - sources.startMs) / span) * plotWidth;
         const y = laneBottom - Math.min(1, Math.max(0, (value - lane.min) / (maximum - lane.min))) * laneHeight;
         if (!active || (previousTime != null && record.chartTime - previousTime > 10_000)) context.moveTo(x, y);

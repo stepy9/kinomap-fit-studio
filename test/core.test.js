@@ -107,6 +107,37 @@ test("parses Kinomap PWX samples too", () => {
   assert.ok(parsed.records.some((record) => record.cadence != null));
 });
 
+test("maps indoor cycling and treadmill activities to matching FIT sports without GPS", () => {
+  const activitiesToTest = [
+    { sourceSport: "Biking", sport: "cycling", subSport: "indoorCycling", speed: 8.5 },
+    { sourceSport: "Running", sport: "running", subSport: "treadmill", speed: 3.2 },
+  ];
+  for (const expected of activitiesToTest) {
+    const xml = `<?xml version="1.0"?><TrainingCenterDatabase><Activities><Activity Sport="${expected.sourceSport}"><Id>2026-10-29T08:00:00Z</Id><Lap><Calories>20</Calories><Track><Trackpoint><Time>2026-10-29T08:00:00Z</Time><DistanceMeters>0</DistanceMeters><HeartRateBpm><Value>100</Value></HeartRateBpm><Cadence>80</Cadence><Extensions><TPX><Watts>120</Watts><Speed>${expected.speed}</Speed></TPX></Extensions></Trackpoint><Trackpoint><Time>2026-10-29T08:00:01Z</Time><DistanceMeters>5</DistanceMeters><HeartRateBpm><Value>101</Value></HeartRateBpm><Cadence>81</Cadence><Extensions><TPX><Watts>122</Watts><Speed>${expected.speed}</Speed></TPX></Extensions></Trackpoint></Track></Lap></Activity></Activities></TrainingCenterDatabase>`;
+    const parsed = parseKinomap(xml);
+    assert.equal(parsed.sport, expected.sport);
+    assert.equal(parsed.subSport, expected.subSport);
+    assert.equal(parsed.records[0].speed, expected.speed);
+    const messages = roundTrip(buildWorkout(parsed).fitBytes);
+    assert.equal(messages.sessionMesgs[0].sport, expected.sport);
+    assert.equal(messages.sessionMesgs[0].subSport, expected.subSport);
+    assert.equal(messages.recordMesgs[0].speed, expected.speed);
+    assert.equal(messages.recordMesgs[0].enhancedSpeed, expected.speed);
+    assert.equal(messages.recordMesgs.some((record) => record.positionLat != null || record.positionLong != null || record.altitude != null), false);
+  }
+});
+
+test("converts PWX cycling speed from km/h to FIT meters per second", () => {
+  const pwx = `<?xml version="1.0"?><pwx><workout><sportType>Cycling</sportType><time>2026-10-29T08:00:00Z</time></workout><sample><timeoffset>0</timeoffset><spd>18</spd><dist>0</dist><cad>80</cad><pwr>120</pwr></sample><sample><timeoffset>1</timeoffset><spd>18</spd><dist>5</dist><cad>81</cad><pwr>122</pwr></sample></pwx>`;
+  const parsed = parseKinomap(pwx);
+  assert.equal(parsed.sport, "cycling");
+  assert.equal(parsed.records[0].speed, 5);
+  const messages = roundTrip(buildWorkout(parsed).fitBytes);
+  assert.equal(messages.sessionMesgs[0].subSport, "indoorCycling");
+  assert.equal(messages.recordMesgs[0].speed, 5);
+  assert.equal(messages.recordMesgs[0].enhancedSpeed, 5);
+});
+
 test("interprets timezone-less timestamps in Europe/Prague with DST", () => {
   const xml = `<?xml version="1.0"?><TrainingCenterDatabase><Activities><Activity Sport="rowing"><Id>2026-07-01T12:00:00</Id><Lap><Calories>1</Calories><Track><Trackpoint><Time>2026-07-01T12:00:00</Time><DistanceMeters>0</DistanceMeters></Trackpoint><Trackpoint><Time>2026-07-01T12:00:01</Time><DistanceMeters>1</DistanceMeters></Trackpoint></Track></Lap></Activity></Activities></TrainingCenterDatabase>`;
   const parsed = parseKinomap(xml);

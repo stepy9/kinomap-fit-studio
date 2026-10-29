@@ -4,13 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f2f4ee" />
-    <title>Rowing FIT Studio</title>
+    <title>Kinomap FIT Studio</title>
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="/" aria-label="Rowing FIT Studio">
-        <span class="brand-mark" aria-hidden="true">RF</span>
-        <span>ROWING FIT <span class="brand-light">STUDIO</span></span>
+      <a class="brand" href="/" aria-label="Kinomap FIT Studio">
+        <span class="brand-mark" aria-hidden="true">KF</span>
+        <span>KINOMAP FIT <span class="brand-light">STUDIO</span></span>
       </a>
       <div class="privacy"><span class="privacy-dot"></span>Soukromé zpracování v prohlížeči</div>
     </header>
@@ -18,7 +18,7 @@
     <main class="shell">
       <section class="page-heading">
         <div>
-          <p class="eyebrow">GARMIN CONNECT · INDOOR ROWING</p>
+          <p class="eyebrow">GARMIN CONNECT · INDOOR SPORTS</p>
           <h1>Jedna aktivita.<br /><span>Dva záznamy.</span></h1>
         </div>
         <p class="heading-note">TCX / PWX + FIT <span>→</span> FIT</p>
@@ -105,7 +105,7 @@
             <span>Název v metadatech FIT</span>
             <input id="activityName" type="text" maxlength="255" value="Kinomap - Rowing Workout" />
           </label>
-          <p class="field-note">Garmin Connect může při importu použít vlastní název. Nadpis a typ události případně upravte v detailu aktivity.</p>
+          <p class="field-note">Connect může název při importu ignorovat. FIT nepřenáší poznámky ani odkaz; nadpis, typ události a poznámku upravte v detailu aktivity.</p>
 
           <div class="zone-row"><span>Časové pásmo výstupu</span><strong>Europe / Prague</strong><span class="zone-badge">UTC+1 / UTC+2</span></div>
         </section>
@@ -135,7 +135,8 @@
             <div class="summary-cell"><span>Kalorie</span><strong id="summaryCalories">—</strong></div>
             <div class="summary-cell"><span>Tep · průměr / max</span><strong id="summaryHeartRate">—</strong></div>
             <div class="summary-cell"><span>Výkon · průměr / max</span><strong id="summaryPower">—</strong></div>
-            <div class="summary-cell"><span>Kadence · průměr / max</span><strong id="summaryCadence">—</strong></div>
+            <div class="summary-cell"><span id="summaryCadenceLabel">Kadence · průměr / max</span><strong id="summaryCadence">—</strong></div>
+            <div class="summary-cell"><span id="summarySpeedLabel">Tempo</span><strong id="summarySpeed">—</strong></div>
           </div>
           <div class="export-row">
             <div class="start-stamp"><span>Start výstupu</span><strong id="startStamp">—</strong></div>
@@ -143,7 +144,7 @@
           </div>
         </section>
       </div>
-      <footer class="footer-line"><span>ROWING FIT STUDIO</span><span>TCX · PWX · FIT</span><span>Europe/Prague</span></footer>
+      <footer class="footer-line"><span>KINOMAP FIT STUDIO</span><span>TCX · PWX · FIT</span><span>Europe/Prague</span></footer>
     </main>
     <script type="module" src="/src/app.js"></script>
   </body>

@@ -42,12 +42,12 @@ export function decodeGarminFit(input) {
   };
 }
 
-export function encodeFit(records, summary, startMs, endMs, timeZone = "Europe/Prague", activityName = "Kinomap - Rowing Workout") {
+export function encodeFit(records, summary, startMs, endMs, timeZone = "Europe/Prague", activityName = "Kinomap - Rowing Workout", sport = "rowing", subSport = "indoorRowing") {
   const encoder = new Encoder();
   const startTime = fitTime(startMs);
   const endTime = fitTime(endMs);
   const elapsedSeconds = Math.max(0, (endMs - startMs) / 1000);
-  const cycles = Math.round((summary.avgCadence ?? 0) * elapsedSeconds / 60);
+  const cycles = sport === "running" ? undefined : Math.round((summary.avgCadence ?? 0) * elapsedSeconds / 60);
   const summaryFields = {
     timestamp: endTime,
     startTime,
@@ -62,8 +62,12 @@ export function encodeFit(records, summary, startMs, endMs, timeZone = "Europe/P
     avgCadence: summary.avgCadence ?? undefined,
     maxCadence: summary.maxCadence ?? undefined,
     totalCycles: cycles,
-    sport: "rowing",
-    subSport: "indoorRowing",
+    avgSpeed: summary.avgSpeed ?? undefined,
+    maxSpeed: summary.maxSpeed ?? undefined,
+    enhancedAvgSpeed: summary.avgSpeed ?? undefined,
+    enhancedMaxSpeed: summary.maxSpeed ?? undefined,
+    sport,
+    subSport,
   };
 
   encoder.writeMesg({
@@ -89,6 +93,10 @@ export function encodeFit(records, summary, startMs, endMs, timeZone = "Europe/P
     if (record.heartRate != null) message.heartRate = Math.round(record.heartRate);
     if (record.cadence != null) message.cadence = Math.round(record.cadence);
     if (record.power != null) message.power = Math.round(record.power);
+    if (record.speed != null) {
+      message.speed = record.speed;
+      message.enhancedSpeed = record.speed;
+    }
     encoder.writeMesg(message);
   }
 

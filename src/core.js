@@ -56,12 +56,24 @@ function validated(records, label) {
   return sorted;
 }
 
+function sportProfile(value) {
+  const normalized = String(value ?? "rowing").toLowerCase().replace(/[^a-z]/g, "");
+  if (["cycling", "biking", "bicycling", "bike", "indoorcycling", "spin"].includes(normalized)) {
+    return { sport: "cycling", subSport: "indoorCycling", sportLabel: "Cyklistika na trenažéru" };
+  }
+  if (["running", "run", "treadmill", "indoorrunning"].includes(normalized)) {
+    return { sport: "running", subSport: "treadmill", sportLabel: "Běh na pásu" };
+  }
+  return { sport: "rowing", subSport: "indoorRowing", sportLabel: "Veslování uvnitř" };
+}
+
 export function parseKinomap(xml, options = {}) {
   const timeZone = options.timeZone ?? "Europe/Prague";
   const source = parser.parse(xml);
 
   if (source.pwx) {
     const workout = source.pwx.workout ?? {};
+    const profile = sportProfile(workout.sportType);
     const parsedStart = timestamp(workout.time, timeZone);
     const startMs = manualStart(options.manualStart, timeZone)
       ?? (Number.isFinite(parsedStart.epochMs) ? parsedStart.epochMs : options.fallbackStartMs ?? Date.now());
@@ -74,10 +86,11 @@ export function parseKinomap(xml, options = {}) {
         heartRate: hr > 0 ? hr : null,
         cadence: number(sample.cad),
         power: number(sample.pwr),
+        speed: number(sample.spd) == null ? null : number(sample.spd) / 3.6,
       };
     });
     return {
-      sourceType: "PWX", startMs, records: validated(records, "PWX"), calories: null,
+      ...profile, sourceType: "PWX", startMs, records: validated(records, "PWX"), calories: null,
       dateHasZone: parsedStart.hasZone,
       warnings: parsedStart.hasZone ? [] : ["Čas v PWX nemá pásmo; vyložen jako Europe/Prague."],
     };
@@ -86,6 +99,7 @@ export function parseKinomap(xml, options = {}) {
   const database = source.TrainingCenterDatabase ?? source;
   const activity = array(database.Activities?.Activity)[0];
   if (!activity) throw new Error("Soubor neobsahuje TCX aktivitu.");
+  const profile = sportProfile(activity["@_Sport"]);
   const lap = array(activity.Lap)[0] ?? {};
   const points = array(lap.Track?.Trackpoint);
   if (!points.length) throw new Error("TCX neobsahuje žádné trackpointy.");
@@ -107,6 +121,7 @@ export function parseKinomap(xml, options = {}) {
       heartRate: hr > 0 ? hr : null,
       cadence: number(point.Cadence),
       power: number(pathValue(point, "Extensions.TPX.Watts") ?? pathValue(point, "Extensions.Watts") ?? point.Watts),
+      speed: number(pathValue(point, "Extensions.TPX.Speed") ?? pathValue(point, "Extensions.Speed") ?? point.Speed),
     };
   });
 
@@ -118,7 +133,7 @@ export function parseKinomap(xml, options = {}) {
   if (!records.some((record) => record.power != null)) warnings.push("TCX neobsahuje watty.");
 
   return {
-    sourceType: "TCX", startMs, records: validated(records, "TCX"),
+    ...profile, sourceType: "TCX", startMs, records: validated(records, "TCX"),
     calories: number(lap.Calories), dateHasZone: parsedStart.hasZone, needsManualStart, warnings,
   };
 }
@@ -205,6 +220,7 @@ function summaryFor(records, durationSeconds, calories) {
   const hr = values(records, "heartRate");
   const power = values(records, "power");
   const cadence = values(records, "cadence");
+  const speed = values(records, "speed");
   return {
     durationSeconds,
     distance: records.at(-1).distance,
@@ -215,6 +231,8 @@ function summaryFor(records, durationSeconds, calories) {
     maxPower: power.length ? Math.max(...power) : null,
     avgCadence: cadence.length ? Math.round(mean(cadence)) : null,
     maxCadence: cadence.length ? Math.max(...cadence) : null,
+    avgSpeed: speed.length ? mean(speed) : null,
+    maxSpeed: speed.length ? Math.max(...speed) : null,
   };
 }
 
@@ -241,6 +259,7 @@ export function buildWorkout(kinomap, fit = null, options = {}) {
         heartRate: watch.heartRate ?? interpolate(kinomap.records, kinomapTime, "heartRate"),
         cadence: interpolate(kinomap.records, kinomapTime, "cadence"),
         power: interpolate(kinomap.records, kinomapTime, "power"),
+        speed: interpolate(kinomap.records, kinomapTime, "speed") ?? watch.speed,
       };
     }).filter((record) => record.distance != null);
     if (records.length < 2) throw new Error("Ve společném úseku nejsou dostatečné záznamy.");
@@ -263,8 +282,12 @@ export function buildWorkout(kinomap, fit = null, options = {}) {
     : kinomap.calories * durationSeconds / sourceDuration;
   const summary = summaryFor(records, durationSeconds, calories);
   const activityName = String(options.activityName ?? "Kinomap - Rowing Workout").trim();
-  const fitBytes = encodeFit(records, summary, startMs, endMs, timeZone, activityName);
-  return { mode: fit ? "merge" : "convert", records, startMs, endMs, summary, activityName, fitBytes, warnings: [...(kinomap.warnings ?? [])] };
+  const fitBytes = encodeFit(records, summary, startMs, endMs, timeZone, activityName, kinomap.sport, kinomap.subSport);
+  return {
+    mode: fit ? "merge" : "convert", records, startMs, endMs, summary, activityName,
+    sport: kinomap.sport, subSport: kinomap.subSport, sportLabel: kinomap.sportLabel,
+    fitBytes, warnings: [...(kinomap.warnings ?? [])],
+  };
 }
 
 export { decodeGarminFit };
