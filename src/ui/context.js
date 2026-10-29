@@ -32,6 +32,20 @@ export const state = {
 
 export const zone = "Europe/Prague";
 
+const locale = () => (state.language === "en" ? "en-GB" : "cs-CZ");
+
+// Wall-clock time of day in the output time zone, e.g. 19:43:51.
+export function clockTime(epochMs) {
+  return new Intl.DateTimeFormat(locale(), { timeZone: zone, timeStyle: "medium" }).format(new Date(epochMs));
+}
+
+// "13. 3. 2026 · 19:43:51 – 20:04:12", with the end date only when it falls on another day.
+export function timeRange(startMs, endMs) {
+  const date = (ms) => new Intl.DateTimeFormat(locale(), { timeZone: zone, dateStyle: "medium" }).format(new Date(ms));
+  const end = date(endMs) === date(startMs) ? clockTime(endMs) : `${date(endMs)} ${clockTime(endMs)}`;
+  return `${date(startMs)} · ${clockTime(startMs)} – ${end}`;
+}
+
 export const t = (key, values = {}) => Object.entries(values).reduce(
   (text, [name, value]) => text.replaceAll(`{${name}}`, value),
   translations[state.language][key] ?? key,

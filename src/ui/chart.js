@@ -1,4 +1,4 @@
-import { elements, formatDuration, state, t } from "./context.js";
+import { byId, clockTime, elements, formatDuration, state, t } from "./context.js";
 
 // The chart spans the whole untrimmed section; the trim is shaded and adjusted by dragging its two handles.
 const handleHitPx = 10;
@@ -65,10 +65,15 @@ function drawTrim(context, { left, top, plotWidth, plotBottom, startMs, span }, 
       context.stroke();
     }
     if (trimmedMs > 0) {
-      context.fillStyle = colors.handle;
+      // Show where the export now starts or ends and how much was cut, keeping the label inside the plot.
+      const boundaryMs = align === "left" ? trim.windowStart : trim.windowEnd;
+      const label = `${clockTime(boundaryMs)} · −${formatDuration(trimmedMs / 1000)}`;
       context.font = "600 11px Inter, Segoe UI, system-ui, sans-serif";
-      context.textAlign = align === "left" ? "right" : "left";
-      context.fillText(`−${formatDuration(trimmedMs / 1000)}`, x + (align === "left" ? -8 : 8), top + 12);
+      const labelWidth = context.measureText(label).width;
+      const toRight = align === "left" ? x + 8 + labelWidth <= left + plotWidth : x - 8 - labelWidth < left;
+      context.textAlign = toRight ? "left" : "right";
+      context.fillStyle = colors.handle;
+      context.fillText(label, x + (toRight ? 8 : -8), top + 12);
       context.textAlign = "left";
     }
   }
@@ -171,6 +176,8 @@ export function drawChart() {
   layout = state.kinomap
     ? { left, top, plotWidth, plotBottom: height - bottom, startMs: sources.startMs, endMs: sources.endMs, span }
     : null;
+  byId("chartAxisStart").textContent = layout ? clockTime(layout.startMs) : "—";
+  byId("chartAxisEnd").textContent = layout ? clockTime(layout.endMs) : "—";
   if (layout) {
     drawTrim(context, layout, trimWindow(layout.startMs, layout.endMs), {
       shade: color("--chart-trim"), handle: color("--accent"), grip: color("--surface"),

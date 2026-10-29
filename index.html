@@ -218,10 +218,10 @@
               <div class="chart-legend"><span><i class="legend-watch"></i><span data-i18n="watch">Hodinky</span></span><span><i class="legend-source"></i><span data-i18n="kinomap">Kinomap</span></span></div>
             </div>
             <canvas id="comparisonChart" aria-label="Graf tepu, výkonu a kadence podle času" data-i18n-aria="chartAria"></canvas>
-            <div class="chart-axis"><span data-i18n="windowStart">Začátek úseku</span><span data-i18n="fromStart">Čas od začátku →</span><span data-i18n="windowEnd">Konec úseku</span></div>
+            <div class="chart-axis"><span id="chartAxisStart">—</span><span data-i18n="fromStart">Čas od začátku →</span><span id="chartAxisEnd">—</span></div>
 
             <div class="export-row">
-              <div class="start-stamp"><span data-i18n="outputStart">Start výstupu</span><strong id="startStamp">—</strong></div>
+              <div class="start-stamp"><span data-i18n="outputStart">Čas aktivity</span><strong id="startStamp">—</strong></div>
               <button class="export-button" id="exportButton" type="button" disabled><span data-i18n="downloadFit">Stáhnout FIT</span><span aria-hidden="true">↓</span></button>
             </div>
             <div class="notice-slot" id="workspaceNoticeSlot"><div class="notice" id="notice" role="status" hidden></div></div>

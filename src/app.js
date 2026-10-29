@@ -6,7 +6,7 @@ import { collectDirectoryFiles, fitFileName, titleFromKinomapFileName } from "./
 import { renderBatchTabs } from "./ui/batch.js";
 import { drawChart, setupChartTrim } from "./ui/chart.js";
 import {
-  applyStaticTranslations, byId, displayNumber, elements, formatDuration, setNotice, sportLabel, state, t, translateMessage, zone,
+  applyStaticTranslations, byId, displayNumber, elements, formatDuration, setNotice, sportLabel, state, t, timeRange, translateMessage, zone,
 } from "./ui/context.js";
 import { exportFit, saveFit } from "./ui/export.js";
 import { savedLanguage, savedTheme, setLanguageMenu, setTheme } from "./ui/preferences.js";
@@ -270,7 +270,7 @@ function updateModeButtons() {
   elements.alignmentPanel.hidden = state.mode !== "merge";
 }
 
-function renderSummary(summary, startMs, sport) {
+function renderSummary(summary, startMs, endMs, sport) {
   byId("summaryDuration").textContent = formatDuration(summary.timerSeconds);
   byId("summaryDistance").textContent = `${displayNumber(summary.distance / 1000, 2)} km`;
   byId("summaryCalories").textContent = `${displayNumber(summary.calories)} kcal`;
@@ -297,10 +297,7 @@ function renderSummary(summary, startMs, sport) {
     speedLabel.textContent = t("averagePace");
     speedValue.textContent = `${formatDuration(secondsPerUnit)} ${sport === "rowing" ? "/500 m" : "min/km"}`;
   }
-  const dateLocale = state.language === "en" ? "en-GB" : "cs-CZ";
-  elements.startStamp.textContent = new Intl.DateTimeFormat(dateLocale, {
-    timeZone: zone, dateStyle: "medium", timeStyle: "medium",
-  }).format(new Date(startMs));
+  elements.startStamp.textContent = timeRange(startMs, endMs);
 }
 
 // Step 1 shows only the inputs; once a recording is open the workspace replaces it until "Change files".
@@ -376,7 +373,7 @@ function render() {
         },
       );
       elements.lapNote.textContent = state.result.lapDistance > 0 ? t("lapCount", { count: state.result.laps.length }) : "";
-      renderSummary(state.result.summary, state.result.startMs, state.result.sport);
+      renderSummary(state.result.summary, state.result.startMs, state.result.endMs, state.result.sport);
       renderChecks();
       elements.export.disabled = false;
       elements.liveState.classList.add("is-ready");
