@@ -6,25 +6,31 @@ import { Decoder, Stream } from "@garmin/fitsdk";
 import { buildWorkout, decodeGarminFit, estimateOffset, parseKinomap } from "../src/core.js";
 import { translations } from "../src/i18n.js";
 
+const fixturesRoot = path.resolve("test", "fixtures");
+// Synthetic fixtures from scripts/generate-fixtures.mjs; the watch heart rate lags Kinomap by this offset.
+const fixtureOffsetSeconds = 7;
+const fixtures = [
+  { sport: "rowing", subSport: "indoorRowing", laps: 4 },
+  { sport: "cycling", subSport: "indoorCycling", laps: 2 },
+  { sport: "running", subSport: "treadmill", laps: 2 },
+].map((fixture) => ({ ...fixture, folder: path.join(fixturesRoot, fixture.sport) }));
+
+const readFixture = (fixture, file) => fs.readFileSync(path.join(fixture.folder, file), file.endsWith(".fit") ? undefined : "utf8");
+const fixtureKinomap = (fixture, file = "activity.tcx") => parseKinomap(readFixture(fixture, file));
+const fixtureFit = (fixture) => decodeGarminFit(readFixture(fixture, "watch.fit"));
+
+// Private real-world recordings live in the git-ignored samples folder; their test is skipped when it is absent.
 const samplesRoot = path.resolve("samples");
-const activities = fs.readdirSync(samplesRoot).map((folderName) => {
+const samples = fs.existsSync(samplesRoot) ? fs.readdirSync(samplesRoot).map((folderName) => {
   const folder = path.join(samplesRoot, folderName);
   const files = fs.readdirSync(folder);
   return {
     folder,
     tcx: files.find((file) => file.toLowerCase().endsWith(".tcx")),
     fit: files.find((file) => file.toLowerCase().endsWith(".fit") && !file.startsWith("Kinomap - ")),
-    pwx: files.find((file) => file.toLowerCase().endsWith(".pwx")),
   };
-}).filter((activity) => activity.tcx);
-
-function readKinomap(activity) {
-  return parseKinomap(fs.readFileSync(path.join(activity.folder, activity.tcx), "utf8"));
-}
-
-function sampleName(activity) {
-  return `Kinomap - ${path.parse(activity.tcx).name.replace(/--\d+$/, "")}`;
-}
+}).filter((sample) => sample.tcx) : [];
+const skipSamples = samples.length ? false : "samples folder not present";
 
 function roundTrip(bytes) {
   const decoder = new Decoder(Stream.fromArrayBuffer(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)));
@@ -44,61 +50,67 @@ test("defines every static interface translation in Czech and English", () => {
   }
 });
 
-test("parses fields and UTC dates from all eight TCX samples", () => {
-  assert.ok(activities.length >= 8);
-  for (const activity of activities) {
-    const parsed = readKinomap(activity);
-    assert.ok(parsed.records.length > 100, activity.tcx);
-    assert.ok(Number.isFinite(parsed.startMs));
-    assert.ok(parsed.records.some((record) => record.distance != null));
-    assert.ok(parsed.records.some((record) => record.cadence != null));
-    assert.ok(parsed.records.some((record) => record.power != null));
-    assert.equal(parsed.dateHasZone, true);
-    assert.equal(parsed.needsManualStart, false);
-  }
-});
+for (const fixture of fixtures) {
+  test(`parses ${fixture.sport} TCX and PWX fixtures into the same records`, () => {
+    const tcx = fixtureKinomap(fixture);
+    const pwx = fixtureKinomap(fixture, "activity.pwx");
+    for (const parsed of [tcx, pwx]) {
+      assert.equal(parsed.sport, fixture.sport);
+      assert.equal(parsed.subSport, fixture.subSport);
+      assert.equal(parsed.records.length, 601);
+      assert.equal(parsed.dateHasZone, true);
+      assert.ok(parsed.records.some((record) => record.power != null));
+      assert.ok(parsed.records.some((record) => record.cadence != null));
+      assert.ok(parsed.records.some((record) => record.heartRate != null));
+    }
+    assert.equal(tcx.needsManualStart, false);
+    assert.equal(tcx.sourceType, "TCX");
+    assert.equal(pwx.sourceType, "PWX");
+    assert.equal(pwx.startMs, tcx.startMs);
+    assert.equal(pwx.records.at(-1).distance, tcx.records.at(-1).distance);
+    assert.ok(Math.abs(pwx.records[100].speed - tcx.records[100].speed) < 0.03);
+  });
 
-test("converts every TCX-only activity to a valid indoor-rowing FIT", () => {
-  for (const activity of activities) {
-    const workout = buildWorkout(readKinomap(activity), null, { activityName: sampleName(activity) });
+  test(`converts the ${fixture.sport} fixture to a valid FIT with sport laps`, () => {
+    const workout = buildWorkout(fixtureKinomap(fixture), null, { activityName: `Kinomap - ${fixture.sport}` });
     const messages = roundTrip(workout.fitBytes);
     assert.equal(messages.fileIdMesgs.length, 1);
+    assert.equal(messages.fileIdMesgs[0].manufacturer, "development");
     assert.equal(messages.recordMesgs.length, workout.records.length);
-    assert.equal(messages.lapMesgs.length, messages.sessionMesgs[0].numLaps);
-    assert.ok(messages.lapMesgs.length > 1);
     assert.equal(messages.sessionMesgs.length, 1);
     assert.equal(messages.activityMesgs.length, 1);
-    assert.equal(messages.sessionMesgs[0].sport, "rowing");
-    assert.equal(messages.sessionMesgs[0].subSport, "indoorRowing");
-    assert.equal(messages.sessionMesgs[0].sportProfileName, sampleName(activity));
+    assert.equal(messages.sessionMesgs[0].sport, fixture.sport);
+    assert.equal(messages.sessionMesgs[0].subSport, fixture.subSport);
+    assert.equal(messages.sessionMesgs[0].sportProfileName, `Kinomap - ${fixture.sport}`);
+    assert.equal(messages.lapMesgs.length, fixture.laps);
+    assert.equal(messages.sessionMesgs[0].numLaps, fixture.laps);
     assert.equal(messages.recordMesgs[0].distance, 0);
     assert.equal(messages.recordMesgs.some((record) => record.positionLat != null || record.positionLong != null || record.altitude != null), false);
-  }
-});
+    assert.ok(messages.sessionMesgs[0].totalCycles > 0);
+    if (fixture.sport === "running") {
+      // FIT running cadence is strides/min; 168 steps/min is written as 84.
+      assert.ok(messages.sessionMesgs[0].avgCadence >= 75 && messages.sessionMesgs[0].avgCadence <= 95);
+      assert.ok(messages.recordMesgs.every((record) => record.cadence == null || record.cadence < 100));
+    }
+  });
 
-test("merges all five Garmin and Kinomap pairs with valid summaries", () => {
-  const paired = activities.filter((activity) => activity.fit);
-  assert.ok(paired.length >= 5);
-  for (const activity of paired) {
-    const kinomap = readKinomap(activity);
-    const fit = decodeGarminFit(fs.readFileSync(path.join(activity.folder, activity.fit)));
+  test(`merges the ${fixture.sport} fixture with its watch FIT at the expected offset`, () => {
+    const kinomap = fixtureKinomap(fixture);
+    const fit = fixtureFit(fixture);
+    assert.equal(fit.fileId.manufacturer, "garmin");
     const estimate = estimateOffset(kinomap, fit);
-    assert.ok(Number.isFinite(estimate.offsetSeconds));
-    assert.ok(estimate.sampleCount > 0);
-    const workout = buildWorkout(kinomap, fit, { offsetSeconds: estimate.offsetSeconds, activityName: sampleName(activity) });
+    assert.equal(estimate.offsetSeconds, fixtureOffsetSeconds);
+    assert.equal(estimate.method, "heart-rate");
+    assert.equal(estimate.confidence, "high");
+    const workout = buildWorkout(kinomap, fit, { offsetSeconds: estimate.offsetSeconds });
     const messages = roundTrip(workout.fitBytes);
-    assert.equal(messages.sessionMesgs[0].sport, "rowing");
-    assert.equal(messages.sessionMesgs[0].subSport, "indoorRowing");
-    assert.equal(messages.sessionMesgs[0].sportProfileName, sampleName(activity));
-    assert.ok(messages.recordMesgs.length > 100);
+    assert.equal(messages.sessionMesgs[0].sport, fixture.sport);
     assert.ok(messages.recordMesgs.every((record) => record.heartRate != null));
     assert.ok(messages.recordMesgs.some((record) => record.power != null));
     assert.ok(messages.recordMesgs.some((record) => record.cadence != null));
-    assert.ok(messages.recordMesgs.every((record) => record.positionLat == null && record.positionLong == null && record.altitude == null));
     assert.equal(messages.recordMesgs[0].distance, 0);
     const lapDistance = messages.lapMesgs.reduce((sum, lap) => sum + lap.totalDistance, 0);
     assert.ok(Math.abs(lapDistance - messages.sessionMesgs[0].totalDistance) < 0.1);
-    assert.equal(messages.activityMesgs[0].numSessions, 1);
     const activityMessage = messages.activityMesgs[0];
     const localDate = new Date(activityMessage.localTimestamp * 1000 + 631065600000);
     const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
@@ -108,15 +120,20 @@ test("merges all five Garmin and Kinomap pairs with valid summaries", () => {
     assert.equal(localDate.toISOString(), `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}.000Z`);
     assert.ok(workout.summary.avgPower > 0);
     assert.ok(workout.summary.avgHeartRate > 0);
-  }
-});
+  });
+}
 
-test("parses Kinomap PWX samples too", () => {
-  const activity = activities.find((item) => item.pwx);
-  const parsed = parseKinomap(fs.readFileSync(path.join(activity.folder, activity.pwx), "utf8"));
-  assert.equal(parsed.sourceType, "PWX");
-  assert.ok(parsed.records.some((record) => record.power != null));
-  assert.ok(parsed.records.some((record) => record.cadence != null));
+test("converts and merges every private sample recording", { skip: skipSamples }, () => {
+  for (const sample of samples) {
+    const kinomap = parseKinomap(fs.readFileSync(path.join(sample.folder, sample.tcx), "utf8"));
+    assert.ok(kinomap.records.length > 100, sample.tcx);
+    roundTrip(buildWorkout(kinomap).fitBytes);
+    if (!sample.fit) continue;
+    const fit = decodeGarminFit(fs.readFileSync(path.join(sample.folder, sample.fit)));
+    const estimate = estimateOffset(kinomap, fit);
+    const messages = roundTrip(buildWorkout(kinomap, fit, { offsetSeconds: estimate.offsetSeconds }).fitBytes);
+    assert.ok(messages.recordMesgs.every((record) => record.heartRate != null), sample.fit);
+  }
 });
 
 test("maps indoor cycling and treadmill activities to matching FIT sports without GPS", () => {
@@ -170,7 +187,7 @@ test("keeps invalid TCX dates available for a manual start-time correction", () 
 });
 
 test("applies start and end trims and rebases distance at zero", () => {
-  const parsed = readKinomap(activities[0]);
+  const parsed = fixtureKinomap(fixtures[0]);
   const workout = buildWorkout(parsed, null, { trimStartSeconds: 30, trimEndSeconds: 20 });
   assert.ok(workout.startMs >= parsed.startMs + 30_000);
   assert.ok(workout.endMs <= parsed.records.at(-1).timeMs - 20_000);
@@ -254,10 +271,9 @@ test("estimates offset from heart rate and watts when Kinomap heart rate is abse
 });
 
 test("rejects merge settings without a common time window", () => {
-  const activity = activities.find((item) => item.fit);
-  const fit = decodeGarminFit(fs.readFileSync(path.join(activity.folder, activity.fit)));
-  assert.throws(() => buildWorkout(readKinomap(activity), fit, { offsetSeconds: 3600 }), /společný časový úsek/);
+  assert.throws(() => buildWorkout(fixtureKinomap(fixtures[0]), fixtureFit(fixtures[0]), { offsetSeconds: 3600 }), /společný časový úsek/);
 });
+
 test("splits laps by sport default or custom distance and writes them to FIT", () => {
   const startMs = Date.parse("2026-01-08T17:00:00Z");
   const records = Array.from({ length: 601 }, (_, second) => ({
@@ -298,4 +314,23 @@ test("ends laps exactly on the lap distance between samples", () => {
   }
   const total = workout.laps.reduce((sum, lap) => sum + lap.distance, 0);
   assert.ok(Math.abs(total - workout.summary.distance) < 1e-9);
+});
+
+test("normalizes per-leg running cadence to steps per minute", () => {
+  const point = (second, cadence) => `<Trackpoint><Time>2026-10-29T08:00:0${second}Z</Time><DistanceMeters>${second * 3}</DistanceMeters><Cadence>${cadence}</Cadence></Trackpoint>`;
+  const xml = (cadence) => `<?xml version="1.0"?><TrainingCenterDatabase><Activities><Activity Sport="Running"><Id>2026-10-29T08:00:00Z</Id><Lap><Track>${point(0, cadence)}${point(1, cadence)}${point(2, cadence)}</Track></Lap></Activity></Activities></TrainingCenterDatabase>`;
+  assert.equal(parseKinomap(xml(85)).records[0].cadence, 170);
+  assert.equal(parseKinomap(xml(171)).records[0].cadence, 171);
+  const messages = roundTrip(buildWorkout(parseKinomap(xml(171))).fitBytes);
+  assert.equal(messages.recordMesgs[0].cadence, 85);
+  assert.equal(messages.recordMesgs[0].fractionalCadence, 0.5);
+  assert.equal(parseKinomap(xml(85).replace("Running", "Biking")).records[0].cadence, 85);
+});
+
+test("moves Kinomap points stamped one second early into the following gap", () => {
+  const point = (time, distance) => `<Trackpoint><Time>2026-06-01T19:38:${time}Z</Time><DistanceMeters>${distance}</DistanceMeters><Cadence>80</Cadence></Trackpoint>`;
+  const xml = `<?xml version="1.0"?><TrainingCenterDatabase><Activities><Activity Sport="Biking"><Id>2026-06-01T19:38:04Z</Id><Lap><Track>${point("04", 0)}${point("04", 5)}${point("06", 17)}${point("07", 23)}${point("07", 29)}${point("08", 35)}</Track></Lap></Activity></Activities></TrainingCenterDatabase>`;
+  const parsed = parseKinomap(xml);
+  assert.deepEqual(parsed.records.map((record) => (record.timeMs - parsed.startMs) / 1000), [0, 1, 2, 3, 4]);
+  assert.deepEqual(parsed.records.map((record) => record.distance), [0, 5, 17, 23, 35]);
 });

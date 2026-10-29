@@ -23,3 +23,7 @@ The output uses the watch timestamps when merging, rebases distance to zero afte
 npm test
 npm run build
 ```
+
+Tests run against synthetic fixtures in `test/fixtures/{rowing,cycling,running}`: a Kinomap TCX and PWX plus a Garmin watch FIT whose heart rate lags Kinomap by 7 s. Regenerate them with `npm run fixtures` (`scripts/generate-fixtures.mjs`). Private recordings in the git-ignored `samples` folder are tested too when present.
+
+Running cadence is kept in steps per minute inside the tool; Kinomap files with per-leg cadence (median below 120) are doubled on import, and the FIT export writes strides per minute with `fractional_cadence`, as Garmin watches do.

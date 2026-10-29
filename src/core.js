@@ -52,8 +52,15 @@ function manualStart(value, timeZone) {
 
 function validated(records, label) {
   const sorted = records.filter((record) => Number.isFinite(record.timeMs)).sort((a, b) => a.timeMs - b.timeMs);
-  if (sorted.length < 2) throw new Error(`${label}: potřebuji alespoň dva časové záznamy.`);
-  return sorted;
+  // Kinomap occasionally stamps a point one second early (t, t, t+2); move it into the gap, otherwise drop the duplicate.
+  const unique = [];
+  sorted.forEach((record, index) => {
+    const previous = unique.at(-1);
+    if (!previous || record.timeMs > previous.timeMs) unique.push(record);
+    else if ((sorted[index + 1]?.timeMs ?? -Infinity) - previous.timeMs >= 2000) unique.push({ ...record, timeMs: previous.timeMs + 1000 });
+  });
+  if (unique.length < 2) throw new Error(`${label}: potřebuji alespoň dva časové záznamy.`);
+  return unique;
 }
 
 function sportProfile(value) {
@@ -65,6 +72,14 @@ function sportProfile(value) {
     return { sport: "running", subSport: "treadmill", sportLabel: "Běh na pásu" };
   }
   return { sport: "rowing", subSport: "indoorRowing", sportLabel: "Veslování uvnitř" };
+}
+
+// Running cadence may arrive per leg (strides/min, ~75–95) or as steps/min (~150–190); keep steps/min internally.
+function normalizedCadence(records, sport) {
+  if (sport !== "running") return records;
+  const cadences = records.map((record) => record.cadence).filter((value) => value > 0).sort((a, b) => a - b);
+  if (!cadences.length || cadences[cadences.length >> 1] >= 120) return records;
+  return records.map((record) => ({ ...record, cadence: record.cadence == null ? null : record.cadence * 2 }));
 }
 
 export function parseKinomap(xml, options = {}) {
@@ -90,7 +105,7 @@ export function parseKinomap(xml, options = {}) {
       };
     });
     return {
-      ...profile, sourceType: "PWX", startMs, records: validated(records, "PWX"), calories: null,
+      ...profile, sourceType: "PWX", startMs, records: normalizedCadence(validated(records, "PWX"), profile.sport), calories: null,
       dateHasZone: parsedStart.hasZone,
       warnings: parsedStart.hasZone ? [] : ["Čas v PWX nemá pásmo; vyložen jako Europe/Prague."],
     };
@@ -133,7 +148,7 @@ export function parseKinomap(xml, options = {}) {
   if (!records.some((record) => record.power != null)) warnings.push("TCX neobsahuje watty.");
 
   return {
-    ...profile, sourceType: "TCX", startMs, records: validated(records, "TCX"),
+    ...profile, sourceType: "TCX", startMs, records: normalizedCadence(validated(records, "TCX"), profile.sport),
     calories: number(lap.Calories), dateHasZone: parsedStart.hasZone, needsManualStart, warnings,
   };
 }
@@ -245,7 +260,8 @@ function summaryFor(records, durationSeconds, calories, sport) {
   const cadence = values(records, "cadence");
   const speed = values(records, "speed");
   const distance = records.at(-1).distance - records[0].distance;
-  const cycles = sport === "running" || !cadence.length ? null : Math.round(cyclesFor(records));
+  // Running cadence is in steps/min, while FIT counts running cycles as strides (one per two steps).
+  const cycles = cadence.length ? Math.round(cyclesFor(records) / (sport === "running" ? 2 : 1)) : null;
   return {
     startMs: records[0].timeMs,
     endMs: records.at(-1).timeMs,

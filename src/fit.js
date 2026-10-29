@@ -42,8 +42,18 @@ export function decodeGarminFit(input) {
   };
 }
 
+// FIT stores running cadence per leg (strides/min) with a half-step fraction; workout records keep steps/min.
+function fitCadence(value, sport) {
+  if (value == null) return { cadence: undefined, fractional: undefined };
+  if (sport !== "running") return { cadence: Math.round(value), fractional: undefined };
+  const strides = Math.round(value) / 2;
+  return { cadence: Math.floor(strides), fractional: strides % 1 };
+}
+
 function summaryFieldsFor(summary, startMs, endMs, sport, subSport) {
   const elapsedSeconds = Math.max(0, (endMs - startMs) / 1000);
+  const avgCadence = fitCadence(summary.avgCadence, sport);
+  const maxCadence = fitCadence(summary.maxCadence, sport);
   return {
     timestamp: fitTime(endMs),
     startTime: fitTime(startMs),
@@ -55,8 +65,10 @@ function summaryFieldsFor(summary, startMs, endMs, sport, subSport) {
     maxHeartRate: summary.maxHeartRate ?? undefined,
     avgPower: summary.avgPower ?? undefined,
     maxPower: summary.maxPower ?? undefined,
-    avgCadence: summary.avgCadence ?? undefined,
-    maxCadence: summary.maxCadence ?? undefined,
+    avgCadence: avgCadence.cadence,
+    maxCadence: maxCadence.cadence,
+    avgFractionalCadence: avgCadence.fractional,
+    maxFractionalCadence: maxCadence.fractional,
     totalCycles: summary.cycles ?? undefined,
     avgStrokeDistance: summary.avgStrokeDistance ?? undefined,
     avgSpeed: summary.avgSpeed ?? undefined,
@@ -96,7 +108,11 @@ export function encodeFit(records, summary, laps, startMs, endMs, timeZone = "Eu
       distance: record.distance,
     };
     if (record.heartRate != null) message.heartRate = Math.round(record.heartRate);
-    if (record.cadence != null) message.cadence = Math.round(record.cadence);
+    if (record.cadence != null) {
+      const { cadence, fractional } = fitCadence(record.cadence, sport);
+      message.cadence = cadence;
+      if (fractional != null) message.fractionalCadence = fractional;
+    }
     if (record.power != null) message.power = Math.round(record.power);
     if (record.speed != null) {
       message.speed = record.speed;
