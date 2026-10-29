@@ -270,13 +270,21 @@ function lapsFor(records, lapDistance, calories, durationSeconds, sport) {
   let current = [records[0]];
   let boundary = lapDistance > 0 ? lapDistance : Infinity;
   for (let index = 1; index < records.length; index += 1) {
+    const before = records[index - 1];
     const record = records[index];
-    current.push(record);
-    if (record.distance >= boundary && index < records.length - 1) {
+    // Close each lap at a point interpolated exactly on the lap boundary, not on the next sample.
+    while (record.distance >= boundary && index < records.length - 1) {
+      const ratio = record.distance === before.distance ? 1 : (boundary - before.distance) / (record.distance - before.distance);
+      const point = { timeMs: before.timeMs + (record.timeMs - before.timeMs) * ratio, distance: boundary };
+      for (const field of ["heartRate", "cadence", "power", "speed"]) {
+        point[field] = before[field] == null || record[field] == null ? null : before[field] + (record[field] - before[field]) * ratio;
+      }
+      current.push(point);
       groups.push(current);
-      current = [record];
-      while (record.distance >= boundary) boundary += lapDistance;
+      current = [point];
+      boundary += lapDistance;
     }
+    current.push(record);
   }
   // A remainder shorter than 10 % of the lap distance is folded into the previous lap.
   const remainder = current.at(-1).distance - current[0].distance;

@@ -13,7 +13,7 @@ const activities = fs.readdirSync(samplesRoot).map((folderName) => {
   return {
     folder,
     tcx: files.find((file) => file.toLowerCase().endsWith(".tcx")),
-    fit: files.find((file) => file.toLowerCase().endsWith(".fit")),
+    fit: files.find((file) => file.toLowerCase().endsWith(".fit") && !file.startsWith("Kinomap - ")),
     pwx: files.find((file) => file.toLowerCase().endsWith(".pwx")),
   };
 }).filter((activity) => activity.tcx);
@@ -284,4 +284,18 @@ test("splits laps by sport default or custom distance and writes them to FIT", (
   assert.equal(buildWorkout(kinomap, null, { lapDistanceMeters: 0 }).laps.length, 1);
   assert.equal(buildWorkout({ ...kinomap, sport: "running", subSport: "treadmill" }).laps.length, 3);
   assert.equal(buildWorkout({ ...kinomap, sport: "cycling", subSport: "indoorCycling" }).laps.length, 1);
+});
+
+test("ends laps exactly on the lap distance between samples", () => {
+  const startMs = Date.parse("2026-01-08T17:00:00Z");
+  const records = Array.from({ length: 601 }, (_, second) => ({
+    timeMs: startMs + second * 1000, distance: second * 3.4, heartRate: 130, cadence: 22, power: 150, speed: 3.4,
+  }));
+  const workout = buildWorkout({ startMs, records, calories: 100, warnings: [], sport: "rowing", subSport: "indoorRowing" });
+  for (const lap of workout.laps.slice(0, -1)) {
+    assert.ok(Math.abs(lap.distance - 500) < 1e-9);
+    assert.ok(Math.abs(lap.durationSeconds - 500 / 3.4) < 1e-6);
+  }
+  const total = workout.laps.reduce((sum, lap) => sum + lap.distance, 0);
+  assert.ok(Math.abs(total - workout.summary.distance) < 1e-9);
 });
