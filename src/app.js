@@ -66,6 +66,7 @@ function resetSummary() {
     byId(id).textContent = "—";
   }
   elements.startStamp.textContent = "—";
+  byId("summaryElevation").hidden = true;
 }
 
 function updateFileRows() {
@@ -171,9 +172,12 @@ function updateModeButtons() {
 }
 
 function renderSummary(summary, startMs, sport) {
-  byId("summaryDuration").textContent = formatDuration(summary.durationSeconds);
+  byId("summaryDuration").textContent = formatDuration(summary.timerSeconds);
   byId("summaryDistance").textContent = `${displayNumber(summary.distance / 1000, 2)} km`;
   byId("summaryCalories").textContent = `${displayNumber(summary.calories)} kcal`;
+  const elevation = byId("summaryElevation");
+  elevation.hidden = summary.ascent == null;
+  elevation.textContent = t("elevation", { ascent: displayNumber(summary.ascent), descent: displayNumber(summary.descent) });
   byId("summaryHeartRate").textContent = summary.avgHeartRate == null
     ? "—" : `${displayNumber(summary.avgHeartRate)} / ${displayNumber(summary.maxHeartRate)} bpm`;
   byId("summaryPower").textContent = summary.avgPower == null

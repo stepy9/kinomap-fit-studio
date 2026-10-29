@@ -77,7 +77,9 @@ function writePwx(sport, samples, file) {
     `<spd>${(sample.speed * 3.6).toFixed(1)}</spd>`,
     sample.power == null ? "" : `<pwr>${sample.power}</pwr>`,
     sample.cadence == null ? "" : `<cad>${sample.cadence}</cad>`,
-    `<dist>${sample.distance}</dist></sample>`,
+    `<dist>${sample.distance}</dist>`,
+    sport.fitSport === "running" ? `<alt>${(1329.3 + Math.sin(sample.distance / 300) * 12).toFixed(1)}</alt>` : "",
+    "</sample>",
   ].join("")).join("");
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <pwx xmlns="http://www.peaksware.com/PWX/1/0" version="1.0" creator="KinomapApiPWX"><workout><sportType>${sport.pwxSport}</sportType><title>Kinomap - </title><time>${sport.startIso}</time><summarydata><beginning>0</beginning><duration>${durationSeconds}</duration></summarydata></workout>${rows}</pwx>

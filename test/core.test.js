@@ -334,3 +334,55 @@ test("moves Kinomap points stamped one second early into the following gap", () 
   assert.deepEqual(parsed.records.map((record) => (record.timeMs - parsed.startMs) / 1000), [0, 1, 2, 3, 4]);
   assert.deepEqual(parsed.records.map((record) => record.distance), [0, 5, 17, 23, 35]);
 });
+
+test("writes route ascent and descent to the session and laps without record altitude", () => {
+  const running = fixtures.find((fixture) => fixture.sport === "running");
+  for (const file of ["activity.tcx", "activity.pwx"]) {
+    const workout = buildWorkout(fixtureKinomap(running, file));
+    assert.ok(workout.summary.ascent > 10, file);
+    assert.ok(workout.summary.descent > 10, file);
+    const messages = roundTrip(workout.fitBytes);
+    assert.equal(messages.sessionMesgs[0].totalAscent, workout.summary.ascent);
+    assert.equal(messages.sessionMesgs[0].totalDescent, workout.summary.descent);
+    const lapAscent = messages.lapMesgs.reduce((sum, lap) => sum + lap.totalAscent, 0);
+    assert.ok(Math.abs(lapAscent - workout.summary.ascent) <= messages.lapMesgs.length);
+    assert.ok(messages.recordMesgs.every((record) => record.altitude == null && record.enhancedAltitude == null));
+  }
+  const merged = buildWorkout(fixtureKinomap(running), fixtureFit(running), { offsetSeconds: fixtureOffsetSeconds });
+  assert.ok(merged.summary.ascent > 10);
+  const rowing = roundTrip(buildWorkout(fixtureKinomap(fixtures[0])).fitBytes);
+  assert.equal(rowing.sessionMesgs[0].totalAscent, undefined);
+});
+
+test("ignores altitude wobble below one meter", () => {
+  const startMs = Date.parse("2026-01-08T17:00:00Z");
+  const altitudes = [100, 100.4, 99.7, 100.3, 103, 102.6, 103.2, 101, 101.5];
+  const records = altitudes.map((altitude, second) => ({ timeMs: startMs + second * 1000, distance: second * 3, altitude }));
+  const workout = buildWorkout({ startMs, records, calories: 1, warnings: [], sport: "running", subSport: "treadmill" });
+  assert.equal(workout.summary.ascent, 3);
+  assert.equal(workout.summary.descent, 2);
+});
+
+test("merges paused TCX track segments and stops the FIT timer during the pause", () => {
+  const point = (time, distance) => `<Trackpoint><Time>2026-10-27T${time}Z</Time><DistanceMeters>${distance}</DistanceMeters><Cadence>80</Cadence><Extensions><ns3:TPX><ns3:Watts>150</ns3:Watts></ns3:TPX></Extensions></Trackpoint>`;
+  const segment = (start, seconds, distance) => Array.from({ length: seconds + 1 }, (_, second) => {
+    const [hours, minutes] = start.split(":").map(Number);
+    const total = hours * 3600 + minutes * 60 + second;
+    const time = [Math.floor(total / 3600), Math.floor(total / 60) % 60, total % 60].map((part) => String(part).padStart(2, "0")).join(":");
+    return point(time, distance + second * 8);
+  }).join("");
+  // Kinomap writes the resumed segment first.
+  const xml = `<?xml version="1.0"?><TrainingCenterDatabase xmlns:ns3="x"><Activities><Activity Sport="Biking"><Id>2026-10-27T03:41:18Z</Id><Lap StartTime="2026-10-27T03:41:18Z"><Calories>100</Calories><Track>${segment("03:51", 60, 4800)}</Track><Track>${segment("02:54", 600, 0)}</Track></Lap></Activity></Activities></TrainingCenterDatabase>`;
+  const parsed = parseKinomap(xml);
+  assert.equal(parsed.records.length, 662);
+  assert.equal(new Date(parsed.startMs).toISOString(), "2026-10-27T02:54:00.000Z");
+  const workout = buildWorkout(parsed, null, { lapDistanceMeters: 0 });
+  assert.equal(workout.summary.timerSeconds, 660);
+  assert.equal(workout.summary.durationSeconds, 3480);
+  const messages = roundTrip(workout.fitBytes);
+  assert.equal(messages.sessionMesgs[0].totalTimerTime, 660);
+  assert.equal(messages.sessionMesgs[0].totalElapsedTime, 3480);
+  assert.deepEqual(messages.eventMesgs.map((event) => event.eventType), ["start", "stopAll", "start", "stop"]);
+  assert.equal(messages.eventMesgs[1].timestamp.toISOString(), "2026-10-27T03:04:00.000Z");
+  assert.equal(messages.eventMesgs[2].timestamp.toISOString(), "2026-10-27T03:51:00.000Z");
+});

@@ -1,5 +1,8 @@
 import { Decoder, Encoder, Profile, Stream, Utils } from "@garmin/fitsdk";
 
+// Gaps longer than this are recording pauses: metrics are not interpolated across them and the FIT timer stops.
+export const pauseGapSeconds = 10;
+
 const fitTime = (epochMs) => Utils.convertDateToDateTime(new Date(epochMs));
 
 function zoneOffsetMs(epochMs, timeZone) {
@@ -58,7 +61,7 @@ function summaryFieldsFor(summary, startMs, endMs, sport, subSport) {
     timestamp: fitTime(endMs),
     startTime: fitTime(startMs),
     totalElapsedTime: elapsedSeconds,
-    totalTimerTime: elapsedSeconds,
+    totalTimerTime: summary.timerSeconds ?? elapsedSeconds,
     totalDistance: summary.distance,
     totalCalories: summary.calories,
     avgHeartRate: summary.avgHeartRate ?? undefined,
@@ -71,6 +74,8 @@ function summaryFieldsFor(summary, startMs, endMs, sport, subSport) {
     maxFractionalCadence: maxCadence.fractional,
     totalCycles: summary.cycles ?? undefined,
     avgStrokeDistance: summary.avgStrokeDistance ?? undefined,
+    totalAscent: summary.ascent ?? undefined,
+    totalDescent: summary.descent ?? undefined,
     avgSpeed: summary.avgSpeed ?? undefined,
     maxSpeed: summary.maxSpeed ?? undefined,
     enhancedAvgSpeed: summary.avgSpeed ?? undefined,
@@ -101,7 +106,13 @@ export function encodeFit(records, summary, laps, startMs, endMs, timeZone = "Eu
     eventType: "start",
   });
 
-  for (const record of records) {
+  records.forEach((record, index) => {
+    const previous = records[index - 1];
+    // Mirror a watch pause: stop the timer at the last sample before the gap and restart it at the next one.
+    if (previous && record.timeMs - previous.timeMs > pauseGapSeconds * 1000) {
+      encoder.writeMesg({ mesgNum: Profile.MesgNum.EVENT, timestamp: fitTime(previous.timeMs), event: "timer", eventType: "stopAll" });
+      encoder.writeMesg({ mesgNum: Profile.MesgNum.EVENT, timestamp: fitTime(record.timeMs), event: "timer", eventType: "start" });
+    }
     const message = {
       mesgNum: Profile.MesgNum.RECORD,
       timestamp: fitTime(record.timeMs),
@@ -119,7 +130,7 @@ export function encodeFit(records, summary, laps, startMs, endMs, timeZone = "Eu
       message.enhancedSpeed = record.speed;
     }
     encoder.writeMesg(message);
-  }
+  });
 
   encoder.writeMesg({
     mesgNum: Profile.MesgNum.EVENT,
@@ -154,7 +165,7 @@ export function encodeFit(records, summary, laps, startMs, endMs, timeZone = "Eu
     timestamp: endTime,
     numSessions: 1,
     localTimestamp: fitTime(endMs + zoneOffsetMs(endMs, timeZone)),
-    totalTimerTime: elapsedSeconds,
+    totalTimerTime: summary.timerSeconds ?? elapsedSeconds,
   });
   return encoder.close();
 }

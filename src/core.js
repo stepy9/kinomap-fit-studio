@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import { decodeGarminFit, encodeFit } from "./fit.js";
+import { decodeGarminFit, encodeFit, pauseGapSeconds } from "./fit.js";
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -102,6 +102,7 @@ export function parseKinomap(xml, options = {}) {
         cadence: number(sample.cad),
         power: number(sample.pwr),
         speed: number(sample.spd) == null ? null : number(sample.spd) / 3.6,
+        altitude: number(sample.alt),
       };
     });
     return {
@@ -115,11 +116,17 @@ export function parseKinomap(xml, options = {}) {
   const activity = array(database.Activities?.Activity)[0];
   if (!activity) throw new Error("Soubor neobsahuje TCX aktivitu.");
   const profile = sportProfile(activity["@_Sport"]);
-  const lap = array(activity.Lap)[0] ?? {};
-  const points = array(lap.Track?.Trackpoint);
+  const laps = array(activity.Lap);
+  const lap = laps[0] ?? {};
+  // A paused and resumed Kinomap session is stored as several Track segments, not necessarily in time order.
+  const points = laps.flatMap((item) => array(item.Track).flatMap((track) => array(track?.Trackpoint)));
   if (!points.length) throw new Error("TCX neobsahuje žádné trackpointy.");
 
-  const startText = points.find((point) => point.Time)?.Time ?? activity.Id ?? lap["@_StartTime"];
+  const earliestPoint = points
+    .map((point) => ({ point, epochMs: timestamp(point.Time, timeZone).epochMs }))
+    .filter((item) => Number.isFinite(item.epochMs))
+    .sort((a, b) => a.epochMs - b.epochMs)[0]?.point;
+  const startText = earliestPoint?.Time ?? points.find((point) => point.Time)?.Time ?? activity.Id ?? lap["@_StartTime"];
   const parsedStart = timestamp(startText, timeZone);
   const adjustedStart = manualStart(options.manualStart, timeZone);
   const startMs = adjustedStart
@@ -137,6 +144,7 @@ export function parseKinomap(xml, options = {}) {
       cadence: number(point.Cadence),
       power: number(pathValue(point, "Extensions.TPX.Watts") ?? pathValue(point, "Extensions.Watts") ?? point.Watts),
       speed: number(pathValue(point, "Extensions.TPX.Speed") ?? pathValue(point, "Extensions.Speed") ?? point.Speed),
+      altitude: number(point.AltitudeMeters),
     };
   });
 
@@ -149,11 +157,24 @@ export function parseKinomap(xml, options = {}) {
 
   return {
     ...profile, sourceType: "TCX", startMs, records: normalizedCadence(validated(records, "TCX"), profile.sport),
-    calories: number(lap.Calories), dateHasZone: parsedStart.hasZone, needsManualStart, warnings,
+    calories: laps.some((item) => number(item.Calories) != null)
+      ? laps.reduce((sum, item) => sum + (number(item.Calories) ?? 0), 0)
+      : null,
+    dateHasZone: parsedStart.hasZone, needsManualStart, warnings,
   };
 }
 
-function interpolate(records, timeMs, field, maxGapSeconds = 10) {
+// Timer time excludes pauses, matching how a watch reports a stopped and resumed activity.
+function movingSeconds(records) {
+  let seconds = 0;
+  for (let index = 1; index < records.length; index += 1) {
+    const step = (records[index].timeMs - records[index - 1].timeMs) / 1000;
+    if (step <= pauseGapSeconds) seconds += step;
+  }
+  return seconds;
+}
+
+function interpolate(records, timeMs, field, maxGapSeconds = pauseGapSeconds) {
   let low = 0;
   let high = records.length;
   while (low < high) {
@@ -248,10 +269,26 @@ function cyclesFor(records) {
     const before = records[index - 1];
     const after = records[index];
     const seconds = (after.timeMs - before.timeMs) / 1000;
-    if (seconds > 10 || before.cadence == null || after.cadence == null) continue;
+    if (seconds > pauseGapSeconds || before.cadence == null || after.cadence == null) continue;
     cycles += (before.cadence + after.cadence) / 2 * seconds / 60;
   }
   return cycles;
+}
+
+// Sum climbs and drops of the virtual route, ignoring wobble below the threshold like Garmin's elevation smoothing.
+function elevationFor(records, threshold = 1) {
+  const altitudes = values(records, "altitude");
+  if (altitudes.length < 2) return { ascent: null, descent: null };
+  let reference = altitudes[0];
+  let ascent = 0;
+  let descent = 0;
+  for (const altitude of altitudes) {
+    if (altitude - reference >= threshold) ascent += altitude - reference;
+    else if (reference - altitude >= threshold) descent += reference - altitude;
+    else continue;
+    reference = altitude;
+  }
+  return { ascent: Math.round(ascent), descent: Math.round(descent) };
 }
 
 function summaryFor(records, durationSeconds, calories, sport) {
@@ -262,13 +299,17 @@ function summaryFor(records, durationSeconds, calories, sport) {
   const distance = records.at(-1).distance - records[0].distance;
   // Running cadence is in steps/min, while FIT counts running cycles as strides (one per two steps).
   const cycles = cadence.length ? Math.round(cyclesFor(records) / (sport === "running" ? 2 : 1)) : null;
+  const { ascent, descent } = elevationFor(records);
   return {
     startMs: records[0].timeMs,
     endMs: records.at(-1).timeMs,
     durationSeconds,
+    timerSeconds: movingSeconds(records),
     distance,
     cycles,
     avgStrokeDistance: sport === "rowing" && cycles ? distance / cycles : null,
+    ascent,
+    descent,
     calories: Math.max(0, Math.round(calories)),
     avgHeartRate: hr.length ? Math.round(mean(hr)) : null,
     maxHeartRate: hr.length ? Math.max(...hr) : null,
@@ -281,7 +322,7 @@ function summaryFor(records, durationSeconds, calories, sport) {
   };
 }
 
-function lapsFor(records, lapDistance, calories, durationSeconds, sport) {
+function lapsFor(records, lapDistance, calories, timerSeconds, sport) {
   const groups = [];
   let current = [records[0]];
   let boundary = lapDistance > 0 ? lapDistance : Infinity;
@@ -292,7 +333,7 @@ function lapsFor(records, lapDistance, calories, durationSeconds, sport) {
     while (record.distance >= boundary && index < records.length - 1) {
       const ratio = record.distance === before.distance ? 1 : (boundary - before.distance) / (record.distance - before.distance);
       const point = { timeMs: before.timeMs + (record.timeMs - before.timeMs) * ratio, distance: boundary };
-      for (const field of ["heartRate", "cadence", "power", "speed"]) {
+      for (const field of ["heartRate", "cadence", "power", "speed", "altitude"]) {
         point[field] = before[field] == null || record[field] == null ? null : before[field] + (record[field] - before[field]) * ratio;
       }
       current.push(point);
@@ -308,7 +349,7 @@ function lapsFor(records, lapDistance, calories, durationSeconds, sport) {
   else groups.push(current);
   return groups.map((group) => {
     const seconds = (group.at(-1).timeMs - group[0].timeMs) / 1000;
-    return summaryFor(group, seconds, calories * seconds / Math.max(1, durationSeconds), sport);
+    return summaryFor(group, seconds, calories * movingSeconds(group) / Math.max(1, timerSeconds), sport);
   });
 }
 
@@ -336,6 +377,7 @@ export function buildWorkout(kinomap, fit = null, options = {}) {
         cadence: interpolate(kinomap.records, kinomapTime, "cadence"),
         power: interpolate(kinomap.records, kinomapTime, "power"),
         speed: interpolate(kinomap.records, kinomapTime, "speed") ?? watch.speed,
+        altitude: interpolate(kinomap.records, kinomapTime, "altitude"),
       };
     }).filter((record) => record.distance != null);
     if (records.length < 2) throw new Error("Ve společném úseku nejsou dostatečné záznamy.");
@@ -352,15 +394,16 @@ export function buildWorkout(kinomap, fit = null, options = {}) {
   startMs = records[0].timeMs;
   endMs = records.at(-1).timeMs;
   const durationSeconds = (endMs - startMs) / 1000;
-  const sourceDuration = Math.max(1, (kinomap.records.at(-1).timeMs - kinomap.records[0].timeMs) / 1000);
+  const timerSeconds = movingSeconds(records);
+  const sourceTimer = Math.max(1, movingSeconds(kinomap.records));
   const calories = kinomap.calories == null
-    ? (mean(values(records, "power")) ?? 0) * durationSeconds * 0.0012
-    : kinomap.calories * durationSeconds / sourceDuration;
+    ? (mean(values(records, "power")) ?? 0) * timerSeconds * 0.0012
+    : kinomap.calories * timerSeconds / sourceTimer;
   const summary = summaryFor(records, durationSeconds, calories, kinomap.sport);
   const lapDistance = options.lapDistanceMeters == null || options.lapDistanceMeters === ""
     ? defaultLapDistance(kinomap.sport)
     : Math.max(0, Number(options.lapDistanceMeters) || 0);
-  const laps = lapsFor(records, lapDistance, calories, durationSeconds, kinomap.sport);
+  const laps = lapsFor(records, lapDistance, calories, timerSeconds, kinomap.sport);
   const activityName = String(options.activityName ?? "Kinomap - Rowing Workout").trim();
   const fitBytes = encodeFit(records, summary, laps, startMs, endMs, timeZone, activityName, kinomap.sport, kinomap.subSport);
   return {
