@@ -123,6 +123,15 @@
             </div>
           </section>
 
+          <section class="trim-panel" aria-label="Kola" data-i18n-aria="laps">
+            <div class="panel-title-row"><span class="field-label" data-i18n="laps">Automatická kola</span></div>
+            <div class="trim-grid">
+              <label class="field"><span data-i18n="lapDistance">Délka kola</span><select id="lapPreset"></select></label>
+              <label class="field" id="lapCustomField" hidden><span data-i18n="lapCustom">Vlastní délka · m</span><input id="lapDistance" type="number" min="1" step="50" value="500" /></label>
+            </div>
+            <div class="estimate-note lap-note" id="lapNote"></div>
+          </section>
+
           <section class="manual-date" id="manualDatePanel" hidden>
             <label class="field">
               <span data-i18n="manualStart">Začátek tréninku · Europe/Prague</span>

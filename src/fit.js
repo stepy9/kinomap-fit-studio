@@ -42,15 +42,11 @@ export function decodeGarminFit(input) {
   };
 }
 
-export function encodeFit(records, summary, startMs, endMs, timeZone = "Europe/Prague", activityName = "Kinomap - Rowing Workout", sport = "rowing", subSport = "indoorRowing") {
-  const encoder = new Encoder();
-  const startTime = fitTime(startMs);
-  const endTime = fitTime(endMs);
+function summaryFieldsFor(summary, startMs, endMs, sport, subSport) {
   const elapsedSeconds = Math.max(0, (endMs - startMs) / 1000);
-  const cycles = sport === "running" ? undefined : Math.round((summary.avgCadence ?? 0) * elapsedSeconds / 60);
-  const summaryFields = {
-    timestamp: endTime,
-    startTime,
+  return {
+    timestamp: fitTime(endMs),
+    startTime: fitTime(startMs),
     totalElapsedTime: elapsedSeconds,
     totalTimerTime: elapsedSeconds,
     totalDistance: summary.distance,
@@ -61,7 +57,8 @@ export function encodeFit(records, summary, startMs, endMs, timeZone = "Europe/P
     maxPower: summary.maxPower ?? undefined,
     avgCadence: summary.avgCadence ?? undefined,
     maxCadence: summary.maxCadence ?? undefined,
-    totalCycles: cycles,
+    totalCycles: summary.cycles ?? undefined,
+    avgStrokeDistance: summary.avgStrokeDistance ?? undefined,
     avgSpeed: summary.avgSpeed ?? undefined,
     maxSpeed: summary.maxSpeed ?? undefined,
     enhancedAvgSpeed: summary.avgSpeed ?? undefined,
@@ -69,6 +66,14 @@ export function encodeFit(records, summary, startMs, endMs, timeZone = "Europe/P
     sport,
     subSport,
   };
+}
+
+export function encodeFit(records, summary, laps, startMs, endMs, timeZone = "Europe/Prague", activityName = "Kinomap - Rowing Workout", sport = "rowing", subSport = "indoorRowing") {
+  const encoder = new Encoder();
+  const startTime = fitTime(startMs);
+  const endTime = fitTime(endMs);
+  const elapsedSeconds = Math.max(0, (endMs - startMs) / 1000);
+  const summaryFields = summaryFieldsFor(summary, startMs, endMs, sport, subSport);
 
   encoder.writeMesg({
     mesgNum: Profile.MesgNum.FILE_ID,
@@ -106,14 +111,16 @@ export function encodeFit(records, summary, startMs, endMs, timeZone = "Europe/P
     event: "timer",
     eventType: "stop",
   });
-  encoder.writeMesg({
-    mesgNum: Profile.MesgNum.LAP,
-    messageIndex: 0,
-    ...summaryFields,
-    event: "lap",
-    eventType: "stop",
-    intensity: "active",
-    lapTrigger: "sessionEnd",
+  laps.forEach((lap, index) => {
+    encoder.writeMesg({
+      mesgNum: Profile.MesgNum.LAP,
+      messageIndex: index,
+      ...summaryFieldsFor(lap, lap.startMs, lap.endMs, sport, subSport),
+      event: "lap",
+      eventType: "stop",
+      intensity: "active",
+      lapTrigger: index === laps.length - 1 ? "sessionEnd" : "distance",
+    });
   });
   encoder.writeMesg({
     mesgNum: Profile.MesgNum.SESSION,
@@ -121,7 +128,7 @@ export function encodeFit(records, summary, startMs, endMs, timeZone = "Europe/P
     ...summaryFields,
     sportProfileName: activityName,
     firstLapIndex: 0,
-    numLaps: 1,
+    numLaps: laps.length,
     event: "session",
     eventType: "stop",
     trigger: "activityEnd",

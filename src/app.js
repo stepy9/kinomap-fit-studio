@@ -1,5 +1,5 @@
 import "./styles.css";
-import { buildWorkout, decodeGarminFit, estimateOffset, parseKinomap } from "./core.js";
+import { buildWorkout, decodeGarminFit, defaultLapDistance, estimateOffset, lapDistancePresets, parseKinomap } from "./core.js";
 import { translations } from "./i18n.js";
 
 const byId = (id) => document.getElementById(id);
@@ -7,6 +7,7 @@ const elements = {
   kinomapInput: byId("kinomapInput"), fitInput: byId("fitInput"), folderInput: byId("folderInput"),
   kinomapName: byId("kinomapName"), fitName: byId("fitName"), kinomapDetail: byId("kinomapDetail"), fitDetail: byId("fitDetail"),
   offset: byId("offsetInput"), alignmentMode: byId("alignmentMode"), trimStart: byId("trimStart"), trimEnd: byId("trimEnd"),
+  lapPreset: byId("lapPreset"), lapCustomField: byId("lapCustomField"), lapDistance: byId("lapDistance"), lapNote: byId("lapNote"),
   manualPanel: byId("manualDatePanel"), manualStart: byId("manualStart"), alignmentPanel: byId("alignmentPanel"),
   alignmentHint: byId("alignmentHint"), estimateNote: byId("estimateNote"), notice: byId("notice"), liveState: byId("liveState"),
   chart: byId("comparisonChart"), export: byId("exportButton"), startStamp: byId("startStamp"), activityName: byId("activityName"),
@@ -65,6 +66,28 @@ function applyStaticTranslations() {
   for (const element of document.querySelectorAll("[data-i18n-aria]")) element.setAttribute("aria-label", t(element.dataset.i18nAria));
 }
 
+function lapLabel(meters) {
+  if (Math.abs(meters - 1609.344) < 1) return "1 mi";
+  return meters >= 1000 ? `${meters / 1000} km` : `${meters} m`;
+}
+
+function renderLapOptions(sport, selected = elements.lapPreset.value) {
+  const fallback = defaultLapDistance(sport);
+  const presets = lapDistancePresets[sport] ?? lapDistancePresets.rowing;
+  const options = [
+    ...presets.map((meters) => [String(meters), meters === fallback ? t("lapDefault", { label: lapLabel(meters) }) : lapLabel(meters)]),
+    ["0", t("lapNone")],
+    ["custom", t("lapCustomOption")],
+  ];
+  elements.lapPreset.replaceChildren(...options.map(([value, label]) => new Option(label, value)));
+  elements.lapPreset.value = options.some(([value]) => value === selected) ? selected : String(fallback);
+  elements.lapCustomField.hidden = elements.lapPreset.value !== "custom";
+}
+
+function lapDistanceValue() {
+  return elements.lapPreset.value === "custom" ? elements.lapDistance.value : elements.lapPreset.value;
+}
+
 function setLanguage(language, persist = true) {
   const previousFallback = `Kinomap - ${t("fallbackActivity")}`;
   state.language = language === "en" ? "en" : "cs";
@@ -75,6 +98,7 @@ function setLanguage(language, persist = true) {
     option.setAttribute("aria-selected", String(option.dataset.language === state.language));
   }
   applyStaticTranslations();
+  renderLapOptions(state.kinomap?.sport);
   if (!state.kinomapFile && (!elements.activityName.value || elements.activityName.value === previousFallback || elements.activityName.value === "Kinomap - Rowing Workout")) {
     elements.activityName.value = `Kinomap - ${t("fallbackActivity")}`;
   }
@@ -220,6 +244,8 @@ async function loadKinomap(file, sourceDirectoryHandle = null) {
     state.kinomapText = await file.text();
     elements.manualStart.value = "";
     parseCurrentKinomap();
+    renderLapOptions(state.kinomap.sport, "");
+    elements.lapDistance.value = defaultLapDistance(state.kinomap.sport);
     updateFileRows();
     if (state.fit) offsetEstimate();
     else render();
@@ -315,9 +341,11 @@ function render() {
           offsetSeconds: elements.offset.value,
           trimStartSeconds: elements.trimStart.value,
           trimEndSeconds: elements.trimEnd.value,
+          lapDistanceMeters: lapDistanceValue(),
           activityName: elements.activityName.value,
         },
       );
+      elements.lapNote.textContent = state.result.lapDistance > 0 ? t("lapCount", { count: state.result.laps.length }) : "";
       renderSummary(state.result.summary, state.result.startMs, state.result.sport);
       elements.export.disabled = false;
       elements.liveState.classList.add("is-ready");
@@ -577,6 +605,11 @@ elements.alignmentMode.addEventListener("change", () => {
 });
 elements.trimStart.addEventListener("input", render);
 elements.trimEnd.addEventListener("input", render);
+elements.lapDistance.addEventListener("input", render);
+elements.lapPreset.addEventListener("change", () => {
+  elements.lapCustomField.hidden = elements.lapPreset.value !== "custom";
+  render();
+});
 elements.activityName.addEventListener("input", render);
 byId("autoOffsetButton").addEventListener("click", offsetEstimate);
 elements.export.addEventListener("click", exportFit);

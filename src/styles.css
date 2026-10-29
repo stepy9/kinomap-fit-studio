@@ -105,6 +105,7 @@ h2 { margin: 0; font-size: 16px; line-height: 1.3; font-weight: 700; letter-spac
 .estimate-note { overflow: hidden; color: #75847b; font: 9px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .trim-panel { padding: 14px 0 15px; border-bottom: 1px solid var(--line); }
 .trim-grid { grid-template-columns: 1fr 1fr; }
+.lap-note { margin-top: 8px; }
 .manual-date { padding: 13px 12px; margin: 12px 0; border-left: 3px solid #d96f3c; background: #fff7ee; }
 .manual-date p { margin: 8px 0 0; color: #81583f; font-size: 10px; line-height: 1.5; }
 .activity-name-field { padding-top: 13px; }

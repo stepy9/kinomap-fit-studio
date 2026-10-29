@@ -216,14 +216,43 @@ export function estimateOffset(kinomap, fit, options = {}) {
 const mean = (values) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 const values = (records, field) => records.map((record) => record[field]).filter(Number.isFinite);
 
-function summaryFor(records, durationSeconds, calories) {
+export const defaultLapDistances = { rowing: 500, running: 1000, cycling: 5000 };
+export const lapDistancePresets = {
+  rowing: [250, 500, 1000, 2000],
+  running: [400, 1000, 1609.344, 5000],
+  cycling: [1000, 5000, 10000, 20000],
+};
+
+export function defaultLapDistance(sport) {
+  return defaultLapDistances[sport] ?? defaultLapDistances.rowing;
+}
+
+function cyclesFor(records) {
+  let cycles = 0;
+  for (let index = 1; index < records.length; index += 1) {
+    const before = records[index - 1];
+    const after = records[index];
+    const seconds = (after.timeMs - before.timeMs) / 1000;
+    if (seconds > 10 || before.cadence == null || after.cadence == null) continue;
+    cycles += (before.cadence + after.cadence) / 2 * seconds / 60;
+  }
+  return cycles;
+}
+
+function summaryFor(records, durationSeconds, calories, sport) {
   const hr = values(records, "heartRate");
   const power = values(records, "power");
   const cadence = values(records, "cadence");
   const speed = values(records, "speed");
+  const distance = records.at(-1).distance - records[0].distance;
+  const cycles = sport === "running" || !cadence.length ? null : Math.round(cyclesFor(records));
   return {
+    startMs: records[0].timeMs,
+    endMs: records.at(-1).timeMs,
     durationSeconds,
-    distance: records.at(-1).distance,
+    distance,
+    cycles,
+    avgStrokeDistance: sport === "rowing" && cycles ? distance / cycles : null,
     calories: Math.max(0, Math.round(calories)),
     avgHeartRate: hr.length ? Math.round(mean(hr)) : null,
     maxHeartRate: hr.length ? Math.max(...hr) : null,
@@ -234,6 +263,29 @@ function summaryFor(records, durationSeconds, calories) {
     avgSpeed: speed.length ? mean(speed) : null,
     maxSpeed: speed.length ? Math.max(...speed) : null,
   };
+}
+
+function lapsFor(records, lapDistance, calories, durationSeconds, sport) {
+  const groups = [];
+  let current = [records[0]];
+  let boundary = lapDistance > 0 ? lapDistance : Infinity;
+  for (let index = 1; index < records.length; index += 1) {
+    const record = records[index];
+    current.push(record);
+    if (record.distance >= boundary && index < records.length - 1) {
+      groups.push(current);
+      current = [record];
+      while (record.distance >= boundary) boundary += lapDistance;
+    }
+  }
+  // A remainder shorter than 10 % of the lap distance is folded into the previous lap.
+  const remainder = current.at(-1).distance - current[0].distance;
+  if (groups.length && remainder < lapDistance * 0.1) groups.push([...groups.pop(), ...current.slice(1)]);
+  else groups.push(current);
+  return groups.map((group) => {
+    const seconds = (group.at(-1).timeMs - group[0].timeMs) / 1000;
+    return summaryFor(group, seconds, calories * seconds / Math.max(1, durationSeconds), sport);
+  });
 }
 
 export function buildWorkout(kinomap, fit = null, options = {}) {
@@ -280,11 +332,15 @@ export function buildWorkout(kinomap, fit = null, options = {}) {
   const calories = kinomap.calories == null
     ? (mean(values(records, "power")) ?? 0) * durationSeconds * 0.0012
     : kinomap.calories * durationSeconds / sourceDuration;
-  const summary = summaryFor(records, durationSeconds, calories);
+  const summary = summaryFor(records, durationSeconds, calories, kinomap.sport);
+  const lapDistance = options.lapDistanceMeters == null || options.lapDistanceMeters === ""
+    ? defaultLapDistance(kinomap.sport)
+    : Math.max(0, Number(options.lapDistanceMeters) || 0);
+  const laps = lapsFor(records, lapDistance, calories, durationSeconds, kinomap.sport);
   const activityName = String(options.activityName ?? "Kinomap - Rowing Workout").trim();
-  const fitBytes = encodeFit(records, summary, startMs, endMs, timeZone, activityName, kinomap.sport, kinomap.subSport);
+  const fitBytes = encodeFit(records, summary, laps, startMs, endMs, timeZone, activityName, kinomap.sport, kinomap.subSport);
   return {
-    mode: fit ? "merge" : "convert", records, startMs, endMs, summary, activityName,
+    mode: fit ? "merge" : "convert", records, startMs, endMs, summary, laps, lapDistance, activityName,
     sport: kinomap.sport, subSport: kinomap.subSport, sportLabel: kinomap.sportLabel,
     fitBytes, warnings: [...(kinomap.warnings ?? [])],
   };

@@ -64,7 +64,8 @@ test("converts every TCX-only activity to a valid indoor-rowing FIT", () => {
     const messages = roundTrip(workout.fitBytes);
     assert.equal(messages.fileIdMesgs.length, 1);
     assert.equal(messages.recordMesgs.length, workout.records.length);
-    assert.equal(messages.lapMesgs.length, 1);
+    assert.equal(messages.lapMesgs.length, messages.sessionMesgs[0].numLaps);
+    assert.ok(messages.lapMesgs.length > 1);
     assert.equal(messages.sessionMesgs.length, 1);
     assert.equal(messages.activityMesgs.length, 1);
     assert.equal(messages.sessionMesgs[0].sport, "rowing");
@@ -95,7 +96,8 @@ test("merges all five Garmin and Kinomap pairs with valid summaries", () => {
     assert.ok(messages.recordMesgs.some((record) => record.cadence != null));
     assert.ok(messages.recordMesgs.every((record) => record.positionLat == null && record.positionLong == null && record.altitude == null));
     assert.equal(messages.recordMesgs[0].distance, 0);
-    assert.equal(messages.lapMesgs[0].totalDistance, messages.sessionMesgs[0].totalDistance);
+    const lapDistance = messages.lapMesgs.reduce((sum, lap) => sum + lap.totalDistance, 0);
+    assert.ok(Math.abs(lapDistance - messages.sessionMesgs[0].totalDistance) < 0.1);
     assert.equal(messages.activityMesgs[0].numSessions, 1);
     const activityMessage = messages.activityMesgs[0];
     const localDate = new Date(activityMessage.localTimestamp * 1000 + 631065600000);
@@ -255,4 +257,31 @@ test("rejects merge settings without a common time window", () => {
   const activity = activities.find((item) => item.fit);
   const fit = decodeGarminFit(fs.readFileSync(path.join(activity.folder, activity.fit)));
   assert.throws(() => buildWorkout(readKinomap(activity), fit, { offsetSeconds: 3600 }), /společný časový úsek/);
+});
+test("splits laps by sport default or custom distance and writes them to FIT", () => {
+  const startMs = Date.parse("2026-01-08T17:00:00Z");
+  const records = Array.from({ length: 601 }, (_, second) => ({
+    timeMs: startMs + second * 1000, distance: second * 4, heartRate: 130, cadence: 24, power: 150, speed: 4,
+  }));
+  const kinomap = { startMs, records, calories: 100, warnings: [], sport: "rowing", subSport: "indoorRowing" };
+
+  const rowing = buildWorkout(kinomap);
+  assert.equal(rowing.lapDistance, 500);
+  assert.equal(rowing.laps.length, 5);
+  assert.equal(rowing.laps[0].distance, 500);
+  assert.equal(rowing.laps[0].cycles, 50);
+  assert.equal(rowing.laps[0].avgStrokeDistance, 10);
+  assert.equal(rowing.summary.cycles, 240);
+
+  const decoder = new Decoder(Stream.fromArrayBuffer(Uint8Array.from(rowing.fitBytes).buffer));
+  const { messages, errors } = decoder.read();
+  assert.equal(errors.length, 0);
+  assert.equal(messages.lapMesgs.length, 5);
+  assert.equal(messages.sessionMesgs[0].numLaps, 5);
+  assert.equal(messages.lapMesgs.at(-1).lapTrigger, "sessionEnd");
+
+  assert.equal(buildWorkout(kinomap, null, { lapDistanceMeters: 1000 }).laps.length, 3);
+  assert.equal(buildWorkout(kinomap, null, { lapDistanceMeters: 0 }).laps.length, 1);
+  assert.equal(buildWorkout({ ...kinomap, sport: "running", subSport: "treadmill" }).laps.length, 3);
+  assert.equal(buildWorkout({ ...kinomap, sport: "cycling", subSport: "indoorCycling" }).laps.length, 1);
 });
