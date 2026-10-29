@@ -1,0 +1,416 @@
+import "./styles.css";
+import { buildWorkout, decodeGarminFit, estimateOffset, parseKinomap } from "./core.js";
+
+const byId = (id) => document.getElementById(id);
+const elements = {
+  kinomapInput: byId("kinomapInput"), fitInput: byId("fitInput"), folderInput: byId("folderInput"),
+  kinomapName: byId("kinomapName"), fitName: byId("fitName"), kinomapDetail: byId("kinomapDetail"), fitDetail: byId("fitDetail"),
+  offset: byId("offsetInput"), alignmentMode: byId("alignmentMode"), trimStart: byId("trimStart"), trimEnd: byId("trimEnd"),
+  manualPanel: byId("manualDatePanel"), manualStart: byId("manualStart"), alignmentPanel: byId("alignmentPanel"),
+  alignmentHint: byId("alignmentHint"), estimateNote: byId("estimateNote"), notice: byId("notice"), liveState: byId("liveState"),
+  chart: byId("comparisonChart"), export: byId("exportButton"), startStamp: byId("startStamp"), activityName: byId("activityName"),
+};
+
+const state = {
+  kinomapFile: null,
+  kinomapText: null,
+  kinomap: null,
+  fitFile: null,
+  fit: null,
+  mode: "convert",
+  result: null,
+  estimate: null,
+  error: null,
+};
+
+const zone = "Europe/Prague";
+const displayDate = new Intl.DateTimeFormat("cs-CZ", {
+  timeZone: zone, dateStyle: "medium", timeStyle: "medium",
+});
+
+function dateInputValue(epochMs) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+    timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date(epochMs)).map((part) => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+function nameFromKinomapFile(file) {
+  const title = file.name.replace(/\.(tcx|pwx)$/i, "").replace(/--\d+$/, "").trim();
+  return `Kinomap - ${title || "Rowing Workout"}`;
+}
+
+function setNotice(text = "", type = "") {
+  elements.notice.textContent = text;
+  elements.notice.hidden = !text;
+  elements.notice.className = `notice${type ? ` is-${type}` : ""}`;
+}
+
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds)) return "—";
+  const total = Math.round(seconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const remainder = total % 60;
+  return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}` : `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+function displayNumber(value, digits = 0) {
+  return Number.isFinite(value) ? new Intl.NumberFormat("cs-CZ", { maximumFractionDigits: digits }).format(value) : "—";
+}
+
+function resetSummary() {
+  for (const id of ["summaryDuration", "summaryDistance", "summaryCalories", "summaryHeartRate", "summaryPower", "summaryCadence"]) {
+    byId(id).textContent = "—";
+  }
+  elements.startStamp.textContent = "—";
+}
+
+function updateFileRows() {
+  elements.kinomapName.textContent = state.kinomapFile?.name ?? "Přetáhněte TCX / PWX";
+  elements.kinomapName.classList.toggle("has-file", Boolean(state.kinomapFile));
+  elements.fitName.textContent = state.fitFile?.name ?? "Přetáhněte FIT";
+  elements.fitName.classList.toggle("has-file", Boolean(state.fitFile));
+  elements.kinomapDetail.textContent = state.kinomap
+    ? `${state.kinomap.records.length.toLocaleString("cs-CZ")} záznamů · ${state.kinomap.sourceType} · ${state.kinomap.calories == null ? "odhad kalorií" : `${state.kinomap.calories} kcal`}`
+    : "Watty · záběry · metry · tep";
+  elements.fitDetail.textContent = state.fit
+    ? `${state.fit.records.length.toLocaleString("cs-CZ")} záznamů · ${state.fit.sessions[0]?.sportProfileName ?? "tepová data"}`
+    : "Tep · časové značky";
+}
+
+function offsetEstimate() {
+  if (!state.kinomap || !state.fit) return;
+  try {
+    state.estimate = estimateOffset(state.kinomap, state.fit, { alignmentMode: elements.alignmentMode.value });
+    elements.offset.value = String(state.estimate.offsetSeconds);
+    const method = state.estimate.method === "heart-rate" ? "tep ↔ tep"
+      : state.estimate.method === "heart-rate-power" ? "tep ↔ watty" : "začátky záznamů";
+    elements.estimateNote.textContent = `${method} · ${state.estimate.offsetSeconds > 0 ? "+" : ""}${state.estimate.offsetSeconds} s · ${state.estimate.confidence === "low" ? "nízká jistota" : `r ${displayNumber(state.estimate.correlation, 2)}`}`;
+    render();
+  } catch (error) {
+    elements.estimateNote.textContent = error.message;
+  }
+}
+
+function parseCurrentKinomap(manual = false) {
+  if (!state.kinomapText) return;
+  const fileDate = state.kinomapFile?.lastModified || Date.now();
+  const initial = parseKinomap(state.kinomapText, { fallbackStartMs: fileDate, timeZone: zone });
+  if (initial.needsManualStart) {
+    elements.manualPanel.hidden = false;
+    if (!elements.manualStart.value) elements.manualStart.value = dateInputValue(fileDate);
+    state.kinomap = parseKinomap(state.kinomapText, {
+      fallbackStartMs: fileDate,
+      manualStart: manual || elements.manualStart.value ? elements.manualStart.value : undefined,
+      timeZone: zone,
+    });
+  } else {
+    elements.manualPanel.hidden = true;
+    elements.manualStart.value = "";
+    state.kinomap = initial;
+  }
+}
+
+async function loadKinomap(file) {
+  if (!file) return;
+  state.error = null;
+  try {
+    state.kinomapFile = file;
+    elements.activityName.value = nameFromKinomapFile(file);
+    state.kinomapText = await file.text();
+    elements.manualStart.value = "";
+    parseCurrentKinomap();
+    updateFileRows();
+    if (state.fit) offsetEstimate();
+    else render();
+  } catch (error) {
+    state.kinomap = null;
+    state.error = `Kinomap soubor nelze načíst: ${error.message}`;
+    render();
+  }
+}
+
+async function loadFit(file) {
+  if (!file) return;
+  state.error = null;
+  try {
+    state.fitFile = file;
+    state.fit = decodeGarminFit(await file.arrayBuffer());
+    state.mode = "merge";
+    updateFileRows();
+    updateModeButtons();
+    if (state.kinomap) offsetEstimate();
+    else render();
+  } catch (error) {
+    state.fit = null;
+    state.error = `FIT soubor nelze načíst: ${error.message}`;
+    render();
+  }
+}
+
+function updateModeButtons() {
+  for (const button of document.querySelectorAll(".mode-button")) {
+    const active = button.dataset.mode === state.mode;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", String(active));
+  }
+  elements.alignmentPanel.hidden = state.mode !== "merge";
+}
+
+function renderSummary(summary, startMs) {
+  byId("summaryDuration").textContent = formatDuration(summary.durationSeconds);
+  byId("summaryDistance").textContent = `${displayNumber(summary.distance / 1000, 2)} km`;
+  byId("summaryCalories").textContent = `${displayNumber(summary.calories)} kcal`;
+  byId("summaryHeartRate").textContent = summary.avgHeartRate == null
+    ? "—" : `${displayNumber(summary.avgHeartRate)} / ${displayNumber(summary.maxHeartRate)} bpm`;
+  byId("summaryPower").textContent = summary.avgPower == null
+    ? "—" : `${displayNumber(summary.avgPower)} / ${displayNumber(summary.maxPower)} W`;
+  byId("summaryCadence").textContent = summary.avgCadence == null
+    ? "—" : `${displayNumber(summary.avgCadence)} / ${displayNumber(summary.maxCadence)} spm`;
+  elements.startStamp.textContent = displayDate.format(new Date(startMs));
+}
+
+function render() {
+  updateModeButtons();
+  updateFileRows();
+  state.result = null;
+  elements.export.disabled = true;
+  elements.liveState.classList.remove("is-ready");
+  elements.liveState.lastChild.textContent = "Čeká na soubory";
+  resetSummary();
+
+  if (state.error) {
+    setNotice(state.error, "error");
+  } else if (!state.kinomap) {
+    setNotice("Vyberte soubor Kinomap.");
+  } else if (state.mode === "merge" && !state.fit) {
+    setNotice("Pro spojení vyberte také FIT záznam hodinek.");
+  } else if (state.kinomap.needsManualStart && !elements.manualStart.value) {
+    setNotice("Nejdřív potvrďte místní začátek aktivity.", "error");
+  } else {
+    try {
+      state.result = buildWorkout(
+        state.kinomap,
+        state.mode === "merge" ? state.fit : null,
+        {
+          timeZone: zone,
+          alignmentMode: elements.alignmentMode.value,
+          offsetSeconds: elements.offset.value,
+          trimStartSeconds: elements.trimStart.value,
+          trimEndSeconds: elements.trimEnd.value,
+          activityName: elements.activityName.value,
+        },
+      );
+      renderSummary(state.result.summary, state.result.startMs);
+      elements.export.disabled = false;
+      elements.liveState.classList.add("is-ready");
+      elements.liveState.lastChild.textContent = "Připraveno";
+      const warnings = [...state.result.warnings];
+      if (state.kinomap.needsManualStart) warnings.push("Čas byl ručně upraven; výstup používá Europe/Prague.");
+      setNotice(warnings.join(" "), warnings.length ? "" : "success");
+    } catch (error) {
+      setNotice(error.message, "error");
+    }
+  }
+  drawChart();
+}
+
+function chartSources() {
+  const kinomap = state.kinomap;
+  const fit = state.mode === "merge" ? state.fit : null;
+  if (!kinomap) return { kinomap: [], fit: [], startMs: 0, endMs: 1 };
+  const offsetMs = (Number(elements.offset.value) || 0) * 1000;
+  const isElapsed = elements.alignmentMode.value === "elapsed";
+  const shift = fit && isElapsed ? fit.startMs - kinomap.startMs : 0;
+  const source = kinomap.records.map((record) => ({
+    ...record, chartTime: record.timeMs + shift + offsetMs,
+  }));
+  const watch = fit?.records.map((record) => ({ ...record, chartTime: record.timeMs })) ?? [];
+  const startMs = state.result?.startMs ?? Math.min(source[0]?.chartTime ?? 0, watch[0]?.chartTime ?? Infinity);
+  const endMs = state.result?.endMs ?? Math.max(source.at(-1)?.chartTime ?? 1, watch.at(-1)?.chartTime ?? 0);
+  return { kinomap: source, fit: watch, startMs, endMs: Math.max(startMs + 1, endMs) };
+}
+
+function drawChart() {
+  const canvas = elements.chart;
+  if (!canvas || canvas.clientWidth === 0) return;
+  const ratio = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  canvas.width = Math.round(width * ratio);
+  canvas.height = Math.round(height * ratio);
+  const context = canvas.getContext("2d");
+  context.scale(ratio, ratio);
+  context.clearRect(0, 0, width, height);
+
+  const sources = chartSources();
+  const lanes = [
+    { key: "heartRate", title: "TEP", unit: "bpm", min: 40, max: 200 },
+    { key: "power", title: "VÝKON", unit: "W", min: 0, max: 400 },
+    { key: "cadence", title: "ZÁBĚRY", unit: "spm", min: 0, max: 60 },
+  ];
+  const left = 43;
+  const right = 10;
+  const top = 7;
+  const bottom = 5;
+  const laneGap = 9;
+  const laneHeight = (height - top - bottom - laneGap * 2) / 3;
+  const plotWidth = width - left - right;
+  const span = Math.max(1, sources.endMs - sources.startMs);
+  const colorKinomap = "#e87943";
+  const colorFit = "#36a77d";
+
+  for (let laneIndex = 0; laneIndex < lanes.length; laneIndex += 1) {
+    const lane = lanes[laneIndex];
+    const laneTop = top + laneIndex * (laneHeight + laneGap);
+    const laneBottom = laneTop + laneHeight;
+    const sourceValues = [
+      ...sources.kinomap.map((record) => record[lane.key]),
+      ...sources.fit.map((record) => record[lane.key]),
+    ].filter(Number.isFinite);
+    const maximum = lane.key === "power" && sourceValues.length ? Math.max(lane.max, Math.max(...sourceValues) * 1.08) : lane.max;
+
+    context.strokeStyle = "#e1e7df";
+    context.lineWidth = 1;
+    for (let grid = 0; grid < 3; grid += 1) {
+      const y = laneTop + grid * laneHeight / 2;
+      context.beginPath();
+      context.moveTo(left, y);
+      context.lineTo(width - right, y);
+      context.stroke();
+    }
+    context.fillStyle = "#60746a";
+    context.font = "9px Cascadia Code, Consolas, monospace";
+    context.fillText(lane.title, 1, laneTop + 11);
+    context.fillStyle = "#96a198";
+    context.font = "8px Cascadia Code, Consolas, monospace";
+    context.fillText(lane.unit, 2, laneTop + 23);
+
+    const drawSeries = (records, color) => {
+      context.strokeStyle = color;
+      context.lineWidth = 1.7;
+      context.lineJoin = "round";
+      context.lineCap = "round";
+      context.beginPath();
+      let active = false;
+      let previousTime = null;
+      for (const record of records) {
+        const value = record[lane.key];
+        if (!Number.isFinite(value) || record.chartTime < sources.startMs || record.chartTime > sources.endMs) {
+          active = false;
+          continue;
+        }
+        const x = left + ((record.chartTime - sources.startMs) / span) * plotWidth;
+        const y = laneBottom - Math.min(1, Math.max(0, (value - lane.min) / (maximum - lane.min))) * laneHeight;
+        if (!active || (previousTime != null && record.chartTime - previousTime > 10_000)) context.moveTo(x, y);
+        else context.lineTo(x, y);
+        active = true;
+        previousTime = record.chartTime;
+      }
+      context.stroke();
+    };
+    drawSeries(sources.fit, colorFit);
+    drawSeries(sources.kinomap, colorKinomap);
+  }
+}
+
+function folderCandidates(files) {
+  const all = [...files];
+  const kinomapFiles = all.filter((file) => /\.(tcx|pwx)$/i.test(file.name));
+  const fitFiles = all.filter((file) => /\.fit$/i.test(file.name));
+  const dateFor = (file) => file.webkitRelativePath?.match(/20\d{2}-\d{2}-\d{2}/)?.[0]
+    ?? file.name.match(/20\d{2}-\d{2}-\d{2}/)?.[0]
+    ?? new Date(file.lastModified).toISOString().slice(0, 10);
+  const pairs = new Map();
+  for (const file of kinomapFiles) pairs.set(dateFor(file), { ...(pairs.get(dateFor(file)) ?? {}), kinomap: file });
+  for (const file of fitFiles) pairs.set(dateFor(file), { ...(pairs.get(dateFor(file)) ?? {}), fit: file });
+  const complete = [...pairs.entries()].filter(([, pair]) => pair.kinomap && pair.fit).sort(([a], [b]) => b.localeCompare(a));
+  if (complete.length) return complete[0][1];
+  return {
+    kinomap: kinomapFiles.sort((a, b) => b.lastModified - a.lastModified)[0],
+    fit: fitFiles.sort((a, b) => b.lastModified - a.lastModified)[0],
+  };
+}
+
+async function loadFolder(files) {
+  const chosen = folderCandidates(files);
+  if (!chosen.kinomap) {
+    setNotice("Ve složce nebyl nalezen TCX ani PWX soubor.", "error");
+    return;
+  }
+  await loadKinomap(chosen.kinomap);
+  if (chosen.fit) await loadFit(chosen.fit);
+  if (chosen.fit && chosen.kinomap) {
+    state.mode = "merge";
+    updateModeButtons();
+    offsetEstimate();
+  }
+}
+
+function exportFit() {
+  if (!state.result) return;
+  const safeName = (state.kinomapFile?.name ?? "rowing-activity")
+    .replace(/\.(tcx|pwx)$/i, "")
+    .replace(/[<>:"/\\|?*]+/g, "-");
+  const url = URL.createObjectURL(new Blob([state.result.fitBytes], { type: "application/octet-stream" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${safeName}.fit`;
+  document.body.append(link);
+  link.click();
+  window.setTimeout(() => {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, 1000);
+}
+
+byId("kinomapButton").addEventListener("click", () => elements.kinomapInput.click());
+byId("fitButton").addEventListener("click", () => elements.fitInput.click());
+byId("folderButton").addEventListener("click", () => elements.folderInput.click());
+elements.kinomapInput.addEventListener("change", (event) => loadKinomap(event.target.files[0]));
+elements.fitInput.addEventListener("change", (event) => loadFit(event.target.files[0]));
+elements.folderInput.addEventListener("change", (event) => loadFolder(event.target.files));
+elements.manualStart.addEventListener("input", () => {
+  parseCurrentKinomap(true);
+  updateFileRows();
+  render();
+});
+elements.offset.addEventListener("input", render);
+elements.alignmentMode.addEventListener("change", () => {
+  elements.alignmentHint.textContent = elements.alignmentMode.value === "absolute" ? "Čas v UTC" : "Podle délky záznamu";
+  render();
+});
+elements.trimStart.addEventListener("input", render);
+elements.trimEnd.addEventListener("input", render);
+elements.activityName.addEventListener("input", render);
+byId("autoOffsetButton").addEventListener("click", offsetEstimate);
+elements.export.addEventListener("click", exportFit);
+
+for (const [tileId, input, accepts] of [
+  ["kinomapDrop", elements.kinomapInput, /\.(tcx|pwx)$/i],
+  ["fitDrop", elements.fitInput, /\.fit$/i],
+]) {
+  const tile = byId(tileId);
+  tile.addEventListener("dragover", (event) => { event.preventDefault(); tile.classList.add("is-dragging"); });
+  tile.addEventListener("dragleave", () => tile.classList.remove("is-dragging"));
+  tile.addEventListener("drop", (event) => {
+    event.preventDefault();
+    tile.classList.remove("is-dragging");
+    const file = [...event.dataTransfer.files].find((item) => accepts.test(item.name));
+    if (input === elements.kinomapInput) loadKinomap(file);
+    else loadFit(file);
+  });
+}
+
+for (const button of document.querySelectorAll(".mode-button")) {
+  button.addEventListener("click", () => {
+    state.mode = button.dataset.mode;
+    render();
+  });
+}
+
+const observer = new ResizeObserver(drawChart);
+observer.observe(elements.chart);
+render();

@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f2f4ee" />
+    <title>Rowing FIT Studio</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Rowing FIT Studio">
+        <span class="brand-mark" aria-hidden="true">RF</span>
+        <span>ROWING FIT <span class="brand-light">STUDIO</span></span>
+      </a>
+      <div class="privacy"><span class="privacy-dot"></span>Soukromé zpracování v prohlížeči</div>
+    </header>
+
+    <main class="shell">
+      <section class="page-heading">
+        <div>
+          <p class="eyebrow">GARMIN CONNECT · INDOOR ROWING</p>
+          <h1>Jedna aktivita.<br /><span>Dva záznamy.</span></h1>
+        </div>
+        <p class="heading-note">TCX / PWX + FIT <span>→</span> FIT</p>
+      </section>
+
+      <div class="workspace">
+        <section class="controls" aria-label="Nastavení aktivity">
+          <div class="section-heading">
+            <span class="section-index">01</span>
+            <h2>Vstupní data</h2>
+            <button class="text-button" id="folderButton" type="button">Vybrat složku</button>
+          </div>
+
+          <input id="kinomapInput" class="visually-hidden" type="file" accept=".tcx,.pwx,application/xml,text/xml" />
+          <input id="fitInput" class="visually-hidden" type="file" accept=".fit,application/octet-stream" />
+          <input id="folderInput" class="visually-hidden" type="file" webkitdirectory multiple />
+
+          <div class="source-grid">
+            <article class="source-tile" id="kinomapDrop" role="group" aria-label="Kinomap TCX nebo PWX">
+              <div class="source-topline"><span class="source-number">A</span><span class="source-kind">KINOMAP</span></div>
+              <h3>Výkon a vzdálenost</h3>
+              <p class="file-name" id="kinomapName">Přetáhněte TCX / PWX</p>
+              <button class="outline-button" id="kinomapButton" type="button">Vybrat TCX / PWX</button>
+              <p class="file-detail" id="kinomapDetail">Watty · záběry · metry · tep</p>
+            </article>
+            <article class="source-tile" id="fitDrop" role="group" aria-label="Garmin FIT z hodinek">
+              <div class="source-topline"><span class="source-number watch-number">B</span><span class="source-kind">GARMIN WATCH</span></div>
+              <h3>Tep a čas</h3>
+              <p class="file-name" id="fitName">Přetáhněte FIT</p>
+              <button class="outline-button" id="fitButton" type="button">Vybrat FIT</button>
+              <p class="file-detail" id="fitDetail">Tep · časové značky</p>
+            </article>
+          </div>
+
+          <div class="mode-row">
+            <span class="field-label">Režim výstupu</span>
+            <div class="segmented" role="tablist" aria-label="Režim výstupu">
+              <button type="button" class="mode-button is-active" data-mode="convert" role="tab" aria-selected="true">Jen převod</button>
+              <button type="button" class="mode-button" data-mode="merge" role="tab" aria-selected="false">Spojit s hodinkami</button>
+            </div>
+          </div>
+
+          <section class="alignment-panel" id="alignmentPanel" aria-label="Zarovnání záznamů">
+            <div class="panel-title-row">
+              <span class="field-label">Zarovnání</span>
+              <span class="alignment-hint" id="alignmentHint">Čas v UTC</span>
+            </div>
+            <div class="alignment-grid">
+              <label class="field">
+                <span>Časová osa</span>
+                <select id="alignmentMode">
+                  <option value="absolute">Časová razítka (UTC)</option>
+                  <option value="elapsed">Uplynulý čas od startu</option>
+                </select>
+              </label>
+              <label class="field offset-field">
+                <span>Posun Kinomap · s</span>
+                <input id="offsetInput" type="number" step="1" value="0" inputmode="numeric" />
+              </label>
+            </div>
+            <div class="align-actions">
+              <button class="accent-button" id="autoOffsetButton" type="button">Odhadnout posun</button>
+              <span class="estimate-note" id="estimateNote">Automatický odhad podle tepu</span>
+            </div>
+          </section>
+
+          <section class="trim-panel" aria-label="Ořez aktivity">
+            <div class="panel-title-row"><span class="field-label">Ořez společného úseku</span><span class="field-unit">sekundy</span></div>
+            <div class="trim-grid">
+              <label class="field"><span>Začátek</span><input id="trimStart" type="number" min="0" step="1" value="0" /></label>
+              <label class="field"><span>Konec</span><input id="trimEnd" type="number" min="0" step="1" value="0" /></label>
+            </div>
+          </section>
+
+          <section class="manual-date" id="manualDatePanel" hidden>
+            <label class="field">
+              <span>Začátek tréninku · Europe/Prague</span>
+              <input id="manualStart" type="datetime-local" />
+            </label>
+            <p>Datum TCX vypadá neplatně. Zkontrolujte návrh podle času uložení souboru.</p>
+          </section>
+
+          <label class="field activity-name-field">
+            <span>Název v metadatech FIT</span>
+            <input id="activityName" type="text" maxlength="255" value="Kinomap - Rowing Workout" />
+          </label>
+          <p class="field-note">Garmin Connect může při importu použít vlastní název. Nadpis a typ události případně upravte v detailu aktivity.</p>
+
+          <div class="zone-row"><span>Časové pásmo výstupu</span><strong>Europe / Prague</strong><span class="zone-badge">UTC+1 / UTC+2</span></div>
+        </section>
+
+        <section class="preview" aria-label="Náhled a export">
+          <div class="section-heading preview-heading">
+            <span class="section-index">02</span>
+            <h2>Kontrola průběhu</h2>
+            <span class="live-state" id="liveState"><span class="state-dot"></span>Čeká na soubory</span>
+          </div>
+
+          <div class="chart-wrap">
+            <div class="chart-toolbar">
+              <span class="chart-title">Srovnání záznamů</span>
+              <div class="chart-legend"><span><i class="legend-watch"></i>Hodinky</span><span><i class="legend-source"></i>Kinomap</span></div>
+            </div>
+            <canvas id="comparisonChart" aria-label="Graf tepu, výkonu a kadence podle času"></canvas>
+            <div class="chart-axis"><span>Začátek úseku</span><span>Čas od začátku →</span><span>Konec úseku</span></div>
+          </div>
+
+          <div class="notice" id="notice" role="status" hidden></div>
+
+          <div class="summary-header"><span class="section-index">03</span><h2>Souhrn před exportem</h2></div>
+          <div class="summary-grid" id="summaryGrid">
+            <div class="summary-cell"><span>Čas</span><strong id="summaryDuration">—</strong></div>
+            <div class="summary-cell"><span>Vzdálenost</span><strong id="summaryDistance">—</strong></div>
+            <div class="summary-cell"><span>Kalorie</span><strong id="summaryCalories">—</strong></div>
+            <div class="summary-cell"><span>Tep · průměr / max</span><strong id="summaryHeartRate">—</strong></div>
+            <div class="summary-cell"><span>Výkon · průměr / max</span><strong id="summaryPower">—</strong></div>
+            <div class="summary-cell"><span>Kadence · průměr / max</span><strong id="summaryCadence">—</strong></div>
+          </div>
+          <div class="export-row">
+            <div class="start-stamp"><span>Start výstupu</span><strong id="startStamp">—</strong></div>
+            <button class="export-button" id="exportButton" type="button" disabled>Stáhnout FIT <span aria-hidden="true">↓</span></button>
+          </div>
+        </section>
+      </div>
+      <footer class="footer-line"><span>ROWING FIT STUDIO</span><span>TCX · PWX · FIT</span><span>Europe/Prague</span></footer>
+    </main>
+    <script type="module" src="/src/app.js"></script>
+  </body>
+</html>
