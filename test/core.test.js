@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { Decoder, Stream } from "@garmin/fitsdk";
 import { buildWorkout, decodeGarminFit, estimateOffset, parseKinomap } from "../src/core.js";
+import { translations } from "../src/i18n.js";
 
 const samplesRoot = path.resolve("samples");
 const activities = fs.readdirSync(samplesRoot).map((folderName) => {
@@ -33,6 +34,15 @@ function roundTrip(bytes) {
   assert.deepEqual(decoded.errors, []);
   return decoded.messages;
 }
+
+test("defines every static interface translation in Czech and English", () => {
+  const html = fs.readFileSync(path.resolve("index.html"), "utf8");
+  const keys = [...html.matchAll(/data-i18n(?:-aria)?="([^"]+)"/g)].map((match) => match[1]);
+  assert.ok(keys.length > 30);
+  for (const language of ["cs", "en"]) {
+    for (const key of keys) assert.ok(translations[language][key], `${language}.${key} is missing`);
+  }
+});
 
 test("parses fields and UTC dates from all eight TCX samples", () => {
   assert.ok(activities.length >= 8);

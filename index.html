@@ -12,24 +12,54 @@
         <span class="brand-mark" aria-hidden="true">KF</span>
         <span>KINOMAP FIT <span class="brand-light">STUDIO</span></span>
       </a>
-      <div class="privacy"><span class="privacy-dot"></span>Soukromé zpracování v prohlížeči</div>
+      <div class="topbar-actions">
+        <div class="privacy"><span class="privacy-dot"></span><span data-i18n="privacy">Soukromé zpracování v prohlížeči</span></div>
+        <div class="language-control" id="languageControl">
+          <span class="visually-hidden" data-i18n="language">Jazyk</span>
+          <button id="languageButton" class="language-button" type="button" aria-label="Jazyk" data-i18n-aria="language" aria-haspopup="listbox" aria-expanded="false" aria-controls="languageMenu">
+            <img id="languageFlag" class="language-flag" src="/flags/cz.svg" alt="" aria-hidden="true" />
+            <span id="languageCode">CZ</span>
+            <span class="language-chevron" aria-hidden="true"></span>
+          </button>
+          <div id="languageMenu" class="language-menu" role="listbox" aria-label="Jazyk" data-i18n-aria="language" hidden>
+            <button class="language-option" type="button" role="option" data-language="cs" aria-selected="true">
+              <img src="/flags/cz.svg" alt="" aria-hidden="true" />
+              <span class="language-option-code">CZ</span>
+              <span class="language-option-name" data-i18n="czech">Čeština</span>
+            </button>
+            <button class="language-option" type="button" role="option" data-language="en" aria-selected="false">
+              <img src="/flags/gb.svg" alt="" aria-hidden="true" />
+              <span class="language-option-code">EN</span>
+              <span class="language-option-name" data-i18n="english">English</span>
+            </button>
+          </div>
+        </div>
+        <div class="theme-switch" role="group" aria-label="Vzhled" data-i18n-aria="appearance">
+          <button id="lightThemeButton" class="theme-choice" type="button" aria-label="Světlý režim" data-i18n-aria="lightMode" aria-pressed="true" title="Světlý režim">
+            <svg class="theme-icon sun-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
+          </button>
+          <button id="darkThemeButton" class="theme-choice" type="button" aria-label="Tmavý režim" data-i18n-aria="darkMode" aria-pressed="false" title="Tmavý režim">
+            <svg class="theme-icon moon-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.1 15.2A8.5 8.5 0 0 1 8.8 3.9 8.6 8.6 0 1 0 20.1 15.2Z"/></svg>
+          </button>
+        </div>
+      </div>
     </header>
 
     <main class="shell">
       <section class="page-heading">
         <div>
           <p class="eyebrow">GARMIN CONNECT · INDOOR SPORTS</p>
-          <h1>Jedna aktivita.<br /><span>Dva záznamy.</span></h1>
+          <h1><span class="headline-first" data-i18n="headingOne">Jedna aktivita.</span><br /><span data-i18n="headingTwo">Dva záznamy.</span></h1>
         </div>
         <p class="heading-note">TCX / PWX + FIT <span>→</span> FIT</p>
       </section>
 
       <div class="workspace">
-        <section class="controls" aria-label="Nastavení aktivity">
+        <section class="controls" aria-label="Nastavení aktivity" data-i18n-aria="controls">
           <div class="section-heading">
             <span class="section-index">01</span>
-            <h2>Vstupní data</h2>
-            <button class="text-button" id="folderButton" type="button">Vybrat složku</button>
+            <h2 data-i18n="inputData">Vstupní data</h2>
+            <button class="text-button" id="folderButton" type="button" data-i18n="chooseFolder">Vybrat složku</button>
           </div>
 
           <input id="kinomapInput" class="visually-hidden" type="file" accept=".tcx,.pwx,application/xml,text/xml" />
@@ -37,114 +67,114 @@
           <input id="folderInput" class="visually-hidden" type="file" webkitdirectory multiple />
 
           <div class="source-grid">
-            <article class="source-tile" id="kinomapDrop" role="group" aria-label="Kinomap TCX nebo PWX">
+            <article class="source-tile" id="kinomapDrop" role="group" aria-label="Kinomap TCX nebo PWX" data-i18n-aria="kinomapGroup">
               <div class="source-topline"><span class="source-number">A</span><span class="source-kind">KINOMAP</span></div>
-              <h3>Výkon a vzdálenost</h3>
-              <p class="file-name" id="kinomapName">Přetáhněte TCX / PWX</p>
-              <button class="outline-button" id="kinomapButton" type="button">Vybrat TCX / PWX</button>
-              <p class="file-detail" id="kinomapDetail">Watty · záběry · metry · tep</p>
+              <h3 data-i18n="sourceHeading">Výkon a vzdálenost</h3>
+              <p class="file-name" id="kinomapName" data-i18n="dropKinomap">Přetáhněte TCX / PWX</p>
+              <button class="outline-button" id="kinomapButton" type="button" data-i18n="chooseKinomap">Vybrat TCX / PWX</button>
+              <p class="file-detail" id="kinomapDetail" data-i18n="sourceDetail">Watty · kadence · vzdálenost · tep</p>
             </article>
-            <article class="source-tile" id="fitDrop" role="group" aria-label="Garmin FIT z hodinek">
+            <article class="source-tile" id="fitDrop" role="group" aria-label="Garmin FIT z hodinek" data-i18n-aria="garminGroup">
               <div class="source-topline"><span class="source-number watch-number">B</span><span class="source-kind">GARMIN WATCH</span></div>
-              <h3>Tep a čas</h3>
-              <p class="file-name" id="fitName">Přetáhněte FIT</p>
-              <button class="outline-button" id="fitButton" type="button">Vybrat FIT</button>
-              <p class="file-detail" id="fitDetail">Tep · časové značky</p>
+              <h3 data-i18n="watchHeading">Tep a čas</h3>
+              <p class="file-name" id="fitName" data-i18n="dropFit">Přetáhněte FIT</p>
+              <button class="outline-button" id="fitButton" type="button" data-i18n="chooseFit">Vybrat FIT</button>
+              <p class="file-detail" id="fitDetail" data-i18n="watchDetail">Tep · časové značky</p>
             </article>
           </div>
 
           <div class="mode-row">
-            <span class="field-label">Režim výstupu</span>
-            <div class="segmented" role="tablist" aria-label="Režim výstupu">
-              <button type="button" class="mode-button is-active" data-mode="convert" role="tab" aria-selected="true">Jen převod</button>
-              <button type="button" class="mode-button" data-mode="merge" role="tab" aria-selected="false">Spojit s hodinkami</button>
+            <span class="field-label" data-i18n="outputMode">Režim výstupu</span>
+            <div class="segmented" role="tablist" aria-label="Režim výstupu" data-i18n-aria="outputMode">
+              <button type="button" class="mode-button is-active" data-mode="convert" role="tab" aria-selected="true" data-i18n="convert">Jen převod</button>
+              <button type="button" class="mode-button" data-mode="merge" role="tab" aria-selected="false" data-i18n="merge">Spojit s hodinkami</button>
             </div>
           </div>
 
-          <section class="alignment-panel" id="alignmentPanel" aria-label="Zarovnání záznamů">
+          <section class="alignment-panel" id="alignmentPanel" aria-label="Zarovnání záznamů" data-i18n-aria="alignment">
             <div class="panel-title-row">
-              <span class="field-label">Zarovnání</span>
+              <span class="field-label" data-i18n="alignment">Zarovnání</span>
               <span class="alignment-hint" id="alignmentHint">Čas v UTC</span>
             </div>
             <div class="alignment-grid">
               <label class="field">
-                <span>Časová osa</span>
+                <span data-i18n="timeline">Časová osa</span>
                 <select id="alignmentMode">
-                  <option value="absolute">Časová razítka (UTC)</option>
-                  <option value="elapsed">Uplynulý čas od startu</option>
+                  <option value="absolute" data-i18n="absoluteTime">Časová razítka (UTC)</option>
+                  <option value="elapsed" data-i18n="elapsedTime">Uplynulý čas od startu</option>
                 </select>
               </label>
               <label class="field offset-field">
-                <span>Posun Kinomap · s</span>
+                <span data-i18n="offset">Posun Kinomap · s</span>
                 <input id="offsetInput" type="number" step="1" value="0" inputmode="numeric" />
               </label>
             </div>
             <div class="align-actions">
-              <button class="accent-button" id="autoOffsetButton" type="button">Odhadnout posun</button>
-              <span class="estimate-note" id="estimateNote">Automatický odhad podle tepu</span>
+              <button class="accent-button" id="autoOffsetButton" type="button" data-i18n="estimateOffset">Odhadnout posun</button>
+              <span class="estimate-note" id="estimateNote" data-i18n="estimatePending">Automatický odhad podle tepu</span>
             </div>
           </section>
 
-          <section class="trim-panel" aria-label="Ořez aktivity">
-            <div class="panel-title-row"><span class="field-label">Ořez společného úseku</span><span class="field-unit">sekundy</span></div>
+          <section class="trim-panel" aria-label="Ořez aktivity" data-i18n-aria="trim">
+            <div class="panel-title-row"><span class="field-label" data-i18n="trim">Ořez společného úseku</span><span class="field-unit" data-i18n="seconds">sekundy</span></div>
             <div class="trim-grid">
-              <label class="field"><span>Začátek</span><input id="trimStart" type="number" min="0" step="1" value="0" /></label>
-              <label class="field"><span>Konec</span><input id="trimEnd" type="number" min="0" step="1" value="0" /></label>
+              <label class="field"><span data-i18n="start">Začátek</span><input id="trimStart" type="number" min="0" step="1" value="0" /></label>
+              <label class="field"><span data-i18n="end">Konec</span><input id="trimEnd" type="number" min="0" step="1" value="0" /></label>
             </div>
           </section>
 
           <section class="manual-date" id="manualDatePanel" hidden>
             <label class="field">
-              <span>Začátek tréninku · Europe/Prague</span>
+              <span data-i18n="manualStart">Začátek tréninku · Europe/Prague</span>
               <input id="manualStart" type="datetime-local" />
             </label>
-            <p>Datum TCX vypadá neplatně. Zkontrolujte návrh podle času uložení souboru.</p>
+            <p data-i18n="invalidDateHelp">Datum TCX vypadá neplatně. Zkontrolujte návrh podle času uložení souboru.</p>
           </section>
 
           <label class="field activity-name-field">
-            <span>Název v metadatech FIT</span>
+            <span data-i18n="activityName">Název v metadatech FIT</span>
             <input id="activityName" type="text" maxlength="255" value="Kinomap - Rowing Workout" />
           </label>
-          <p class="field-note">Connect může název při importu ignorovat. FIT nepřenáší poznámky ani odkaz; nadpis, typ události a poznámku upravte v detailu aktivity.</p>
+          <p class="field-note" data-i18n="activityNameNote">Connect může název při importu ignorovat. FIT nepřenáší poznámky ani odkaz; nadpis, typ události a poznámku upravte v detailu aktivity.</p>
 
-          <div class="zone-row"><span>Časové pásmo výstupu</span><strong>Europe / Prague</strong><span class="zone-badge">UTC+1 / UTC+2</span></div>
+          <div class="zone-row"><span data-i18n="timeZone">Časové pásmo výstupu</span><strong>Europe / Prague</strong><span class="zone-badge">UTC+1 / UTC+2</span></div>
         </section>
 
-        <section class="preview" aria-label="Náhled a export">
+        <section class="preview" aria-label="Náhled a export" data-i18n-aria="preview">
           <div class="section-heading preview-heading">
             <span class="section-index">02</span>
-            <h2>Kontrola průběhu</h2>
+            <h2 data-i18n="preview">Kontrola průběhu</h2>
             <span class="live-state" id="liveState"><span class="state-dot"></span>Čeká na soubory</span>
           </div>
 
           <div class="chart-wrap">
             <div class="chart-toolbar">
-              <span class="chart-title">Srovnání záznamů</span>
-              <div class="chart-legend"><span><i class="legend-watch"></i>Hodinky</span><span><i class="legend-source"></i>Kinomap</span></div>
+              <span class="chart-title" data-i18n="chartTitle">Srovnání záznamů</span>
+                <div class="chart-legend"><span><i class="legend-watch"></i><span data-i18n="watch">Hodinky</span></span><span><i class="legend-source"></i><span data-i18n="kinomap">Kinomap</span></span></div>
             </div>
-            <canvas id="comparisonChart" aria-label="Graf tepu, výkonu a kadence podle času"></canvas>
-            <div class="chart-axis"><span>Začátek úseku</span><span>Čas od začátku →</span><span>Konec úseku</span></div>
+            <canvas id="comparisonChart" aria-label="Graf tepu, výkonu a kadence podle času" data-i18n-aria="chartAria"></canvas>
+            <div class="chart-axis"><span data-i18n="windowStart">Začátek úseku</span><span data-i18n="fromStart">Čas od začátku →</span><span data-i18n="windowEnd">Konec úseku</span></div>
           </div>
 
           <div class="notice" id="notice" role="status" hidden></div>
 
-          <div class="summary-header"><span class="section-index">03</span><h2>Souhrn před exportem</h2></div>
+          <div class="summary-header"><span class="section-index">03</span><h2 data-i18n="summary">Souhrn před exportem</h2></div>
           <div class="summary-grid" id="summaryGrid">
-            <div class="summary-cell"><span>Čas</span><strong id="summaryDuration">—</strong></div>
-            <div class="summary-cell"><span>Vzdálenost</span><strong id="summaryDistance">—</strong></div>
-            <div class="summary-cell"><span>Kalorie</span><strong id="summaryCalories">—</strong></div>
-            <div class="summary-cell"><span>Tep · průměr / max</span><strong id="summaryHeartRate">—</strong></div>
-            <div class="summary-cell"><span>Výkon · průměr / max</span><strong id="summaryPower">—</strong></div>
-            <div class="summary-cell"><span id="summaryCadenceLabel">Kadence · průměr / max</span><strong id="summaryCadence">—</strong></div>
-            <div class="summary-cell"><span id="summarySpeedLabel">Tempo</span><strong id="summarySpeed">—</strong></div>
+            <div class="summary-cell"><span data-i18n="duration">Čas</span><strong id="summaryDuration">—</strong></div>
+            <div class="summary-cell"><span data-i18n="distance">Vzdálenost</span><strong id="summaryDistance">—</strong></div>
+            <div class="summary-cell"><span data-i18n="calories">Kalorie</span><strong id="summaryCalories">—</strong></div>
+            <div class="summary-cell"><span data-i18n="heartRate">Tep · průměr / max</span><strong id="summaryHeartRate">—</strong></div>
+            <div class="summary-cell"><span data-i18n="power">Výkon · průměr / max</span><strong id="summaryPower">—</strong></div>
+            <div class="summary-cell"><span id="summaryCadenceLabel" data-i18n="cadence">Kadence · průměr / max</span><strong id="summaryCadence">—</strong></div>
+            <div class="summary-cell"><span id="summarySpeedLabel" data-i18n="genericSpeed">Tempo</span><strong id="summarySpeed">—</strong></div>
           </div>
           <div class="export-row">
-            <div class="start-stamp"><span>Start výstupu</span><strong id="startStamp">—</strong></div>
-            <button class="export-button" id="exportButton" type="button" disabled>Stáhnout FIT <span aria-hidden="true">↓</span></button>
+            <div class="start-stamp"><span data-i18n="outputStart">Start výstupu</span><strong id="startStamp">—</strong></div>
+            <button class="export-button" id="exportButton" type="button" disabled><span data-i18n="downloadFit">Stáhnout FIT</span><span aria-hidden="true">↓</span></button>
           </div>
         </section>
       </div>
-      <footer class="footer-line"><span>KINOMAP FIT STUDIO</span><span>TCX · PWX · FIT</span><span>Europe/Prague</span></footer>
+      <footer class="footer-line"><span>KINOMAP FIT STUDIO</span><span data-i18n="footerFormats">TCX · PWX · FIT</span><span>Europe/Prague</span></footer>
     </main>
     <script type="module" src="/src/app.js"></script>
   </body>

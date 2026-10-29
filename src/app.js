@@ -1,5 +1,6 @@
 import "./styles.css";
 import { buildWorkout, decodeGarminFit, estimateOffset, parseKinomap } from "./core.js";
+import { translations } from "./i18n.js";
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -9,6 +10,8 @@ const elements = {
   manualPanel: byId("manualDatePanel"), manualStart: byId("manualStart"), alignmentPanel: byId("alignmentPanel"),
   alignmentHint: byId("alignmentHint"), estimateNote: byId("estimateNote"), notice: byId("notice"), liveState: byId("liveState"),
   chart: byId("comparisonChart"), export: byId("exportButton"), startStamp: byId("startStamp"), activityName: byId("activityName"),
+  lightThemeButton: byId("lightThemeButton"), darkThemeButton: byId("darkThemeButton"), languageControl: byId("languageControl"),
+  languageButton: byId("languageButton"), languageCode: byId("languageCode"), languageMenu: byId("languageMenu"), languageFlag: byId("languageFlag"),
 };
 
 const state = {
@@ -18,15 +21,78 @@ const state = {
   fitFile: null,
   fit: null,
   mode: "convert",
+  language: "cs",
   result: null,
   estimate: null,
   error: null,
 };
 
 const zone = "Europe/Prague";
-const displayDate = new Intl.DateTimeFormat("cs-CZ", {
-  timeZone: zone, dateStyle: "medium", timeStyle: "medium",
-});
+const t = (key, values = {}) => Object.entries(values).reduce(
+  (text, [name, value]) => text.replaceAll(`{${name}}`, value),
+  translations[state.language][key] ?? key,
+);
+
+const sportLabel = (sport) => t(sport === "cycling" ? "cyclingIndoor" : sport === "running" ? "runningTreadmill" : "rowingIndoor");
+
+const knownMessages = {
+  "Čas v TCX nemá pásmo; vyložen jako Europe/Prague.": "timezoneTcx",
+  "Čas v PWX nemá pásmo; vyložen jako Europe/Prague.": "timezonePwx",
+  "Datum vypadá neplatně; zadejte místní začátek tréninku.": "invalidActivityDate",
+  "TCX neobsahuje watty.": "noPower",
+  "Po zarovnání a ořezu nezůstal společný časový úsek.": "estimateNoOverlap",
+  "Ve společném úseku nejsou dostatečné záznamy.": "estimateTooFew",
+  "Po ořezu nezůstal časový úsek.": "trimNoTime",
+  "Po ořezu nezůstaly dostatečné záznamy.": "trimTooFew",
+  "Soubor neobsahuje TCX aktivitu.": "tcxActivityMissing",
+  "TCX neobsahuje žádné trackpointy.": "tcxPointsMissing",
+  "Vybraný soubor není FIT.": "fitFileInvalid",
+  "FIT soubor neprošel kontrolou integrity.": "fitIntegrity",
+};
+
+function translateMessage(message) {
+  if (knownMessages[message]) return t(knownMessages[message]);
+  if (message.startsWith("FIT nelze načíst: ")) return t("fitRead", { message: message.slice("FIT nelze načíst: ".length) });
+  if (message.startsWith("TCX: ")) return t("needRecords", { label: "TCX" });
+  if (message.startsWith("PWX: ")) return t("needRecords", { label: "PWX" });
+  if (message.startsWith("FIT: ")) return t("needRecords", { label: "FIT" });
+  return message;
+}
+
+function applyStaticTranslations() {
+  for (const element of document.querySelectorAll("[data-i18n]")) element.textContent = t(element.dataset.i18n);
+  for (const element of document.querySelectorAll("[data-i18n-aria]")) element.setAttribute("aria-label", t(element.dataset.i18nAria));
+}
+
+function setLanguage(language, persist = true) {
+  const previousFallback = `Kinomap - ${t("fallbackActivity")}`;
+  state.language = language === "en" ? "en" : "cs";
+  document.documentElement.lang = state.language;
+  elements.languageCode.textContent = state.language.toUpperCase();
+  elements.languageFlag.src = state.language === "en" ? "/flags/gb.svg" : "/flags/cz.svg";
+  for (const option of elements.languageMenu.querySelectorAll("[data-language]")) {
+    option.setAttribute("aria-selected", String(option.dataset.language === state.language));
+  }
+  applyStaticTranslations();
+  if (!state.kinomapFile && (!elements.activityName.value || elements.activityName.value === previousFallback || elements.activityName.value === "Kinomap - Rowing Workout")) {
+    elements.activityName.value = `Kinomap - ${t("fallbackActivity")}`;
+  }
+  if (state.estimate) updateEstimateNote();
+  if (persist) {
+    try {
+      localStorage.setItem("kinomap-fit-language", state.language);
+    } catch {}
+  }
+  render();
+}
+
+function savedLanguage() {
+  try {
+    return localStorage.getItem("kinomap-fit-language") === "en" ? "en" : "cs";
+  } catch {
+    return "cs";
+  }
+}
 
 function dateInputValue(epochMs) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
@@ -38,11 +104,11 @@ function dateInputValue(epochMs) {
 
 function nameFromKinomapFile(file) {
   const title = file.name.replace(/\.(tcx|pwx)$/i, "").replace(/--\d+$/, "").trim();
-  return `Kinomap - ${title || "Rowing Workout"}`;
+  return `Kinomap - ${title || t("fallbackActivity")}`;
 }
 
 function setNotice(text = "", type = "") {
-  elements.notice.textContent = text;
+  elements.notice.textContent = translateMessage(text);
   elements.notice.hidden = !text;
   elements.notice.className = `notice${type ? ` is-${type}` : ""}`;
 }
@@ -57,7 +123,30 @@ function formatDuration(seconds) {
 }
 
 function displayNumber(value, digits = 0) {
-  return Number.isFinite(value) ? new Intl.NumberFormat("cs-CZ", { maximumFractionDigits: digits }).format(value) : "—";
+  const locale = state.language === "en" ? "en-GB" : "cs-CZ";
+  return Number.isFinite(value) ? new Intl.NumberFormat(locale, { maximumFractionDigits: digits }).format(value) : "—";
+}
+
+function setTheme(theme, persist = true) {
+  const isDark = theme === "dark";
+  document.documentElement.dataset.theme = isDark ? "dark" : "light";
+  elements.lightThemeButton.setAttribute("aria-pressed", String(!isDark));
+  elements.darkThemeButton.setAttribute("aria-pressed", String(isDark));
+  document.querySelector('meta[name="theme-color"]').content = isDark ? "#111a16" : "#f2f4ee";
+  if (persist) {
+    try {
+      localStorage.setItem("kinomap-fit-theme", isDark ? "dark" : "light");
+    } catch {}
+  }
+  drawChart();
+}
+
+function savedTheme() {
+  try {
+    return localStorage.getItem("kinomap-fit-theme") === "dark" ? "dark" : "light";
+  } catch {
+    return "light";
+  }
 }
 
 function resetSummary() {
@@ -68,16 +157,25 @@ function resetSummary() {
 }
 
 function updateFileRows() {
-  elements.kinomapName.textContent = state.kinomapFile?.name ?? "Přetáhněte TCX / PWX";
+  elements.kinomapName.textContent = state.kinomapFile?.name ?? t("dropKinomap");
   elements.kinomapName.classList.toggle("has-file", Boolean(state.kinomapFile));
-  elements.fitName.textContent = state.fitFile?.name ?? "Přetáhněte FIT";
+  elements.fitName.textContent = state.fitFile?.name ?? t("dropFit");
   elements.fitName.classList.toggle("has-file", Boolean(state.fitFile));
   elements.kinomapDetail.textContent = state.kinomap
-    ? `${state.kinomap.records.length.toLocaleString("cs-CZ")} záznamů · ${state.kinomap.sportLabel} · ${state.kinomap.calories == null ? "odhad kalorií" : `${state.kinomap.calories} kcal`}`
-    : "Watty · záběry · metry · tep";
+    ? `${state.kinomap.records.length.toLocaleString(state.language === "en" ? "en-GB" : "cs-CZ")} ${t("records")} · ${sportLabel(state.kinomap.sport)} · ${state.kinomap.calories == null ? t("noPowerEstimate") : `${state.kinomap.calories} kcal`}`
+    : t("sourceDetail");
   elements.fitDetail.textContent = state.fit
-    ? `${state.fit.records.length.toLocaleString("cs-CZ")} záznamů · ${state.fit.sessions[0]?.sportProfileName ?? "tepová data"}`
-    : "Tep · časové značky";
+    ? `${state.fit.records.length.toLocaleString(state.language === "en" ? "en-GB" : "cs-CZ")} ${t("records")} · ${state.fit.sessions[0]?.sportProfileName ?? t("watchDetail")}`
+    : t("watchDetail");
+}
+
+function updateEstimateNote() {
+  if (!state.estimate) return;
+  const method = state.estimate.method === "heart-rate" ? t("estimateHr")
+    : state.estimate.method === "heart-rate-power" ? t("estimatePower") : t("estimateStarts");
+  const confidence = state.estimate.confidence === "low"
+    ? t("confidenceLow") : `r ${displayNumber(state.estimate.correlation, 2)}`;
+  elements.estimateNote.textContent = `${method} · ${state.estimate.offsetSeconds > 0 ? "+" : ""}${state.estimate.offsetSeconds} s · ${confidence}`;
 }
 
 function offsetEstimate() {
@@ -85,12 +183,10 @@ function offsetEstimate() {
   try {
     state.estimate = estimateOffset(state.kinomap, state.fit, { alignmentMode: elements.alignmentMode.value });
     elements.offset.value = String(state.estimate.offsetSeconds);
-    const method = state.estimate.method === "heart-rate" ? "tep ↔ tep"
-      : state.estimate.method === "heart-rate-power" ? "tep ↔ watty" : "začátky záznamů";
-    elements.estimateNote.textContent = `${method} · ${state.estimate.offsetSeconds > 0 ? "+" : ""}${state.estimate.offsetSeconds} s · ${state.estimate.confidence === "low" ? "nízká jistota" : `r ${displayNumber(state.estimate.correlation, 2)}`}`;
+    updateEstimateNote();
     render();
   } catch (error) {
-    elements.estimateNote.textContent = error.message;
+    elements.estimateNote.textContent = translateMessage(error.message);
   }
 }
 
@@ -127,7 +223,7 @@ async function loadKinomap(file) {
     else render();
   } catch (error) {
     state.kinomap = null;
-    state.error = `Kinomap soubor nelze načíst: ${error.message}`;
+    state.error = { key: "fileReadKinomap", message: error.message };
     render();
   }
 }
@@ -145,7 +241,7 @@ async function loadFit(file) {
     else render();
   } catch (error) {
     state.fit = null;
-    state.error = `FIT soubor nelze načíst: ${error.message}`;
+    state.error = { key: "fileReadFit", message: error.message };
     render();
   }
 }
@@ -167,22 +263,26 @@ function renderSummary(summary, startMs, sport) {
     ? "—" : `${displayNumber(summary.avgHeartRate)} / ${displayNumber(summary.maxHeartRate)} bpm`;
   byId("summaryPower").textContent = summary.avgPower == null
     ? "—" : `${displayNumber(summary.avgPower)} / ${displayNumber(summary.maxPower)} W`;
+  byId("summaryCadenceLabel").textContent = t("cadence");
   byId("summaryCadence").textContent = summary.avgCadence == null
     ? "—" : `${displayNumber(summary.avgCadence)} / ${displayNumber(summary.maxCadence)} ${sport === "cycling" ? "rpm" : "spm"}`;
   const speedLabel = byId("summarySpeedLabel");
   const speedValue = byId("summarySpeed");
   if (summary.avgSpeed == null || summary.avgSpeed <= 0) {
-    speedLabel.textContent = "Rychlost / tempo";
+    speedLabel.textContent = t("genericSpeed");
     speedValue.textContent = "—";
   } else if (sport === "cycling") {
-    speedLabel.textContent = "Průměrná rychlost";
+    speedLabel.textContent = t("averageSpeed");
     speedValue.textContent = `${displayNumber(summary.avgSpeed * 3.6, 1)} km/h`;
   } else {
     const secondsPerUnit = 1000 / summary.avgSpeed / (sport === "rowing" ? 2 : 1);
-    speedLabel.textContent = "Průměrné tempo";
+    speedLabel.textContent = t("averagePace");
     speedValue.textContent = `${formatDuration(secondsPerUnit)} ${sport === "rowing" ? "/500 m" : "min/km"}`;
   }
-  elements.startStamp.textContent = displayDate.format(new Date(startMs));
+  const dateLocale = state.language === "en" ? "en-GB" : "cs-CZ";
+  elements.startStamp.textContent = new Intl.DateTimeFormat(dateLocale, {
+    timeZone: zone, dateStyle: "medium", timeStyle: "medium",
+  }).format(new Date(startMs));
 }
 
 function render() {
@@ -191,17 +291,17 @@ function render() {
   state.result = null;
   elements.export.disabled = true;
   elements.liveState.classList.remove("is-ready");
-  elements.liveState.lastChild.textContent = "Čeká na soubory";
+  elements.liveState.lastChild.textContent = t("waiting");
   resetSummary();
 
   if (state.error) {
-    setNotice(state.error, "error");
+    setNotice(t(state.error.key, { message: translateMessage(state.error.message) }), "error");
   } else if (!state.kinomap) {
-    setNotice("Vyberte soubor Kinomap.");
+    setNotice(t("waitingForKinomap"));
   } else if (state.mode === "merge" && !state.fit) {
-    setNotice("Pro spojení vyberte také FIT záznam hodinek.");
+    setNotice(t("missingFit"));
   } else if (state.kinomap.needsManualStart && !elements.manualStart.value) {
-    setNotice("Nejdřív potvrďte místní začátek aktivity.", "error");
+    setNotice(t("confirmStart"), "error");
   } else {
     try {
       state.result = buildWorkout(
@@ -219,9 +319,9 @@ function render() {
       renderSummary(state.result.summary, state.result.startMs, state.result.sport);
       elements.export.disabled = false;
       elements.liveState.classList.add("is-ready");
-      elements.liveState.lastChild.textContent = "Připraveno";
-      const warnings = [...state.result.warnings];
-      if (state.kinomap.needsManualStart) warnings.push("Čas byl ručně upraven; výstup používá Europe/Prague.");
+      elements.liveState.lastChild.textContent = t("ready");
+      const warnings = state.result.warnings.map(translateMessage);
+      if (state.kinomap.needsManualStart) warnings.push(t("manualTimeNote"));
       setNotice(warnings.join(" "), warnings.length ? "" : "success");
     } catch (error) {
       setNotice(error.message, "error");
@@ -262,11 +362,11 @@ function drawChart() {
   const running = state.kinomap?.sport === "running";
   const cadenceMax = state.kinomap?.sport === "cycling" ? 140 : running ? 220 : 60;
   const lanes = [
-    { key: "heartRate", title: "TEP", unit: "bpm", min: 40, max: 200 },
+    { key: "heartRate", title: t("heartRateLane"), unit: "bpm", min: 40, max: 200 },
     running
-      ? { key: "speed", title: "RYCHLOST", unit: "km/h", min: 0, max: 18, scale: 3.6 }
-      : { key: "power", title: "VÝKON", unit: "W", min: 0, max: 400 },
-    { key: "cadence", title: "KADENCE", unit: state.kinomap?.sport === "cycling" ? "rpm" : "spm", min: 0, max: cadenceMax },
+      ? { key: "speed", title: t("speedLane"), unit: "km/h", min: 0, max: 18, scale: 3.6 }
+      : { key: "power", title: t("powerLane"), unit: "W", min: 0, max: 400 },
+    { key: "cadence", title: t("cadenceLane"), unit: state.kinomap?.sport === "cycling" ? "rpm" : "spm", min: 0, max: cadenceMax },
   ];
   const left = 43;
   const right = 10;
@@ -278,6 +378,10 @@ function drawChart() {
   const span = Math.max(1, sources.endMs - sources.startMs);
   const colorKinomap = "#e87943";
   const colorFit = "#36a77d";
+  const theme = getComputedStyle(document.documentElement);
+  const gridColor = theme.getPropertyValue("--chart-grid").trim();
+  const labelColor = theme.getPropertyValue("--chart-label").trim();
+  const subtleColor = theme.getPropertyValue("--chart-subtle").trim();
 
   for (let laneIndex = 0; laneIndex < lanes.length; laneIndex += 1) {
     const lane = lanes[laneIndex];
@@ -292,7 +396,7 @@ function drawChart() {
       ? Math.max(lane.max, Math.max(...sourceValues) * 1.08)
       : lane.max;
 
-    context.strokeStyle = "#e1e7df";
+    context.strokeStyle = gridColor;
     context.lineWidth = 1;
     for (let grid = 0; grid < 3; grid += 1) {
       const y = laneTop + grid * laneHeight / 2;
@@ -301,10 +405,10 @@ function drawChart() {
       context.lineTo(width - right, y);
       context.stroke();
     }
-    context.fillStyle = "#60746a";
+    context.fillStyle = labelColor;
     context.font = "9px Cascadia Code, Consolas, monospace";
     context.fillText(lane.title, 1, laneTop + 11);
-    context.fillStyle = "#96a198";
+    context.fillStyle = subtleColor;
     context.font = "8px Cascadia Code, Consolas, monospace";
     context.fillText(lane.unit, 2, laneTop + 23);
 
@@ -358,7 +462,7 @@ function folderCandidates(files) {
 async function loadFolder(files) {
   const chosen = folderCandidates(files);
   if (!chosen.kinomap) {
-    setNotice("Ve složce nebyl nalezen TCX ani PWX soubor.", "error");
+    setNotice(t("noFolderKinomap"), "error");
     return;
   }
   await loadKinomap(chosen.kinomap);
@@ -400,7 +504,7 @@ elements.manualStart.addEventListener("input", () => {
 });
 elements.offset.addEventListener("input", render);
 elements.alignmentMode.addEventListener("change", () => {
-  elements.alignmentHint.textContent = elements.alignmentMode.value === "absolute" ? "Čas v UTC" : "Podle délky záznamu";
+  elements.alignmentHint.textContent = elements.alignmentMode.value === "absolute" ? t("timeUTC") : t("elapsedAlignment");
   render();
 });
 elements.trimStart.addEventListener("input", render);
@@ -408,6 +512,49 @@ elements.trimEnd.addEventListener("input", render);
 elements.activityName.addEventListener("input", render);
 byId("autoOffsetButton").addEventListener("click", offsetEstimate);
 elements.export.addEventListener("click", exportFit);
+elements.lightThemeButton.addEventListener("click", () => setTheme("light"));
+elements.darkThemeButton.addEventListener("click", () => setTheme("dark"));
+function setLanguageMenu(open) {
+  elements.languageMenu.hidden = !open;
+  elements.languageButton.setAttribute("aria-expanded", String(open));
+}
+
+elements.languageButton.addEventListener("click", () => setLanguageMenu(elements.languageMenu.hidden));
+elements.languageButton.addEventListener("keydown", (event) => {
+  if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    setLanguageMenu(true);
+    elements.languageMenu.querySelector(`[data-language="${state.language}"]`).focus();
+  }
+});
+for (const option of elements.languageMenu.querySelectorAll("[data-language]")) {
+  option.addEventListener("click", () => {
+    setLanguage(option.dataset.language);
+    setLanguageMenu(false);
+    elements.languageButton.focus();
+  });
+  option.addEventListener("keydown", (event) => {
+    const options = [...elements.languageMenu.querySelectorAll("[data-language]")];
+    const index = options.indexOf(option);
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      options[(index + (event.key === "ArrowDown" ? 1 : options.length - 1)) % options.length].focus();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      setLanguageMenu(false);
+      elements.languageButton.focus();
+    }
+  });
+}
+document.addEventListener("pointerdown", (event) => {
+  if (!elements.languageControl.contains(event.target)) setLanguageMenu(false);
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !elements.languageMenu.hidden) {
+    setLanguageMenu(false);
+    elements.languageButton.focus();
+  }
+});
 
 for (const [tileId, input, accepts] of [
   ["kinomapDrop", elements.kinomapInput, /\.(tcx|pwx)$/i],
@@ -434,4 +581,6 @@ for (const button of document.querySelectorAll(".mode-button")) {
 
 const observer = new ResizeObserver(drawChart);
 observer.observe(elements.chart);
+setTheme(savedTheme(), false);
+setLanguage(savedLanguage(), false);
 render();
