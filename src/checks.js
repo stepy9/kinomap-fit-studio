@@ -8,11 +8,37 @@ const heartRateRange = [35, 220];
 // Warn when the watch window drops more than this share of the Kinomap distance (and at least the minimum).
 const missedDistanceShare = 0.1;
 const missedDistanceMinimum = 100;
+// Kinomap keeps counting distance while an idle video plays; effort below this share of the typical power is ignored.
+const activePowerShare = 0.5;
+// Missed effort at this share of the typical power or more is the workout itself, not an easy warm-up or cool-down.
+const workPowerShare = 0.9;
 
 const median = (values) => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[sorted.length >> 1];
 };
+
+// Distance trained outside the exported window: all active effort, and the part at full workout intensity.
+function missedDistance(sourceRecords, window) {
+  const powers = sourceRecords.map((record) => record.power).filter((value) => value > 0);
+  const typical = powers.length ? median(powers) : null;
+  const atLeast = (record, share) => typical == null || (record.power ?? 0) >= typical * share;
+  let total = 0;
+  let active = 0;
+  let work = 0;
+  for (let index = 1; index < sourceRecords.length; index += 1) {
+    const before = sourceRecords[index - 1];
+    const record = sourceRecords[index];
+    const step = (record.distance ?? before.distance ?? 0) - (before.distance ?? 0);
+    if (!(step > 0)) continue;
+    total += step;
+    const outside = record.timeMs <= window.startMs || before.timeMs >= window.endMs;
+    if (!outside) continue;
+    if (atLeast(record, activePowerShare)) active += step;
+    if (atLeast(record, workPowerShare)) work += step;
+  }
+  return { total, active, work };
+}
 
 function heartRateGaps(records) {
   if (!records.some((record) => record.heartRate != null)) return null;
@@ -86,13 +112,12 @@ export function checkWorkout(workout, { kinomap = null, estimate = null, trimmed
   if (workout.mode === "merge") {
     if (estimate?.confidence === "low") add("checkOffsetUncertain", "warning", { method: estimate.method });
     // Distance, not time: Kinomap often keeps an idle video running after the watch has stopped.
-    if (kinomap && !trimmed) {
-      const distances = kinomap.records.map((record) => record.distance).filter(Number.isFinite);
-      const sourceDistance = distances.length ? Math.max(...distances) - Math.min(...distances) : 0;
-      const missed = sourceDistance - workout.summary.distance;
-      if (missed > missedDistanceMinimum && missed / sourceDistance > missedDistanceShare) {
-        add("checkCoverage", "warning", { meters: Math.round(missed), percent: Math.round((missed / sourceDistance) * 100) });
-      }
+    if (kinomap && workout.sourceWindow && !trimmed) {
+      const { total, active, work } = missedDistance(kinomap.records, workout.sourceWindow);
+      const significant = (meters) => meters > missedDistanceMinimum && meters / total > missedDistanceShare;
+      const values = (meters) => ({ meters: Math.round(meters), percent: Math.round((meters / total) * 100) });
+      if (significant(work)) add("checkCoverage", "warning", values(work));
+      else if (significant(active)) add("checkCoverageEasy", "info", values(active));
     }
   }
   add("checkHeartRateGaps", "warning", heartRateGaps(records));

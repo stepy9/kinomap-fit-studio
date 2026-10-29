@@ -363,9 +363,12 @@ export function buildWorkout(kinomap, fit = null, options = {}) {
   let records;
   let startMs;
   let endMs;
+  // Exported time minus this gives the Kinomap clock; zero when converting.
+  let sourceShiftMs = 0;
 
   if (fit) {
     const baseShift = alignmentMode === "elapsed" ? fit.startMs - kinomap.startMs : 0;
+    sourceShiftMs = baseShift + offsetMs;
     startMs = Math.max(kinomap.records[0].timeMs + baseShift + offsetMs, fit.records[0].timeMs) + trimStartMs;
     endMs = Math.min(kinomap.records.at(-1).timeMs + baseShift + offsetMs, fit.records.at(-1).timeMs) - trimEndMs;
     if (endMs <= startMs) throw new Error("Po zarovnání a ořezu nezůstal společný časový úsek.");
@@ -409,6 +412,7 @@ export function buildWorkout(kinomap, fit = null, options = {}) {
   const fitBytes = encodeFit(records, summary, laps, startMs, endMs, timeZone, activityName, kinomap.sport, kinomap.subSport);
   return {
     mode: fit ? "merge" : "convert", records, startMs, endMs, summary, laps, lapDistance, activityName,
+    sourceWindow: { startMs: startMs - sourceShiftMs, endMs: endMs - sourceShiftMs },
     sport: kinomap.sport, subSport: kinomap.subSport, sportLabel: kinomap.sportLabel,
     fitBytes, warnings: [...(kinomap.warnings ?? [])],
   };
