@@ -386,3 +386,13 @@ test("merges paused TCX track segments and stops the FIT timer during the pause"
   assert.equal(messages.eventMesgs[1].timestamp.toISOString(), "2026-10-27T03:04:00.000Z");
   assert.equal(messages.eventMesgs[2].timestamp.toISOString(), "2026-10-27T03:51:00.000Z");
 });
+
+test("ignores route altitude for rowing", () => {
+  const startMs = Date.parse("2026-01-08T17:00:00Z");
+  const records = [100, 103, 99, 104].map((altitude, second) => ({ timeMs: startMs + second * 1000, distance: second * 4, altitude }));
+  const kinomap = { startMs, records, calories: 1, warnings: [] };
+  const rowing = buildWorkout({ ...kinomap, sport: "rowing", subSport: "indoorRowing" });
+  assert.equal(rowing.summary.ascent, null);
+  assert.equal(roundTrip(rowing.fitBytes).sessionMesgs[0].totalAscent, undefined);
+  assert.equal(buildWorkout({ ...kinomap, sport: "cycling", subSport: "indoorCycling" }).summary.ascent, 8);
+});

@@ -299,7 +299,8 @@ function summaryFor(records, durationSeconds, calories, sport) {
   const distance = records.at(-1).distance - records[0].distance;
   // Running cadence is in steps/min, while FIT counts running cycles as strides (one per two steps).
   const cycles = cadence.length ? Math.round(cyclesFor(records) / (sport === "running" ? 2 : 1)) : null;
-  const { ascent, descent } = elevationFor(records);
+  // Water has no climbs: Kinomap rowing videos only carry the GPS altitude noise of the river or lake.
+  const { ascent, descent } = sport === "rowing" ? { ascent: null, descent: null } : elevationFor(records);
   return {
     startMs: records[0].timeMs,
     endMs: records.at(-1).timeMs,
