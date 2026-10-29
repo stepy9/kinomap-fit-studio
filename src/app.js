@@ -173,7 +173,16 @@ async function selectBatchItem(item) {
   }
 }
 
-async function exportBatch() {
+async function exportBatchToFolder() {
+  try {
+    await exportBatch(await window.showDirectoryPicker({ id: "kinomap-fit-output", mode: "readwrite" }));
+  } catch (error) {
+    if (error.name !== "AbortError") setNotice(error.message, "error");
+  }
+}
+
+// Each FIT goes next to its source file, or into one folder when the user picked it.
+async function exportBatch(targetDirectory = null) {
   const batch = state.batch;
   const active = activeBatchItem();
   if (active && state.kinomap) active.settings = currentSettings();
@@ -185,7 +194,7 @@ async function exportBatch() {
     renderBatch();
     try {
       const workout = buildBatchWorkout(item, item.settings);
-      const { saved } = await saveFit(workout.fitBytes, fitFileName(workout.activityName, t("fallbackActivity")), item.directoryHandle);
+      const { saved } = await saveFit(workout.fitBytes, fitFileName(workout.activityName, t("fallbackActivity")), targetDirectory ?? item.directoryHandle);
       counts[saved ? "saved" : "downloaded"] += 1;
       Object.assign(item, { status: null, failure: null, exported: true, selected: false });
     } catch (error) {
@@ -516,7 +525,8 @@ elements.timeZone.addEventListener("change", () => changeZone(elements.timeZone.
 for (const select of Object.values(elements.sources)) select.addEventListener("change", render);
 byId("autoOffsetButton").addEventListener("click", offsetEstimate);
 elements.export.addEventListener("click", exportFit);
-byId("batchExportButton").addEventListener("click", exportBatch);
+byId("batchExportButton").addEventListener("click", () => exportBatch());
+byId("batchFolderExportButton").addEventListener("click", exportBatchToFolder);
 elements.lightThemeButton.addEventListener("click", () => setTheme("light"));
 elements.darkThemeButton.addEventListener("click", () => setTheme("dark"));
 elements.languageButton.addEventListener("click", () => setLanguageMenu(elements.languageMenu.hidden));

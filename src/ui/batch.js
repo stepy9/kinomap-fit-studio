@@ -4,6 +4,7 @@ const panel = byId("batchPanel");
 const tabs = byId("batchTabs");
 const note = byId("batchNote");
 const exportButton = byId("batchExportButton");
+const folderExportButton = byId("batchFolderExportButton");
 
 function shortDate(epochMs) {
   if (!Number.isFinite(epochMs)) return "—";
@@ -59,5 +60,9 @@ export function renderBatchTabs({ onSelect, onToggle }) {
   const selected = batch.items.filter((item) => item.selected).length;
   note.textContent = t("batchSelected", { count: selected, total: batch.items.length });
   exportButton.disabled = !selected || batch.busy;
-  exportButton.firstElementChild.textContent = t("batchExport", { count: selected });
+  // Saving everything into one chosen folder needs the File System Access API, so desktop Chromium only.
+  folderExportButton.hidden = typeof window.showDirectoryPicker !== "function";
+  folderExportButton.disabled = exportButton.disabled;
+  exportButton.textContent = t("batchExport", { count: selected });
+  folderExportButton.textContent = t("batchToFolder", { count: selected });
 }
