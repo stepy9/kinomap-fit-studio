@@ -170,10 +170,11 @@ function updateFileRows() {
   elements.fitName.classList.toggle("has-file", Boolean(state.fitFile));
   elements.kinomapDetail.textContent = state.kinomap
     ? `${state.kinomap.records.length.toLocaleString(state.language === "en" ? "en-GB" : "cs-CZ")} ${t("records")} · ${sportLabel(state.kinomap.sport)} · ${state.kinomap.calories == null ? t("noPowerEstimate") : `${state.kinomap.calories} kcal`}`
-    : t("sourceDetail");
+    : "";
   elements.fitDetail.textContent = state.fit
-    ? `${state.fit.records.length.toLocaleString(state.language === "en" ? "en-GB" : "cs-CZ")} ${t("records")} · ${state.fit.sessions[0]?.sportProfileName ?? t("watchDetail")}`
-    : t("watchDetail");
+    ? [`${state.fit.records.length.toLocaleString(state.language === "en" ? "en-GB" : "cs-CZ")} ${t("records")}`, state.fit.sessions[0]?.sportProfileName]
+      .filter(Boolean).join(" · ")
+    : "";
 }
 
 function updateEstimateNote() {

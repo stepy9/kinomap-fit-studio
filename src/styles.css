@@ -78,7 +78,7 @@
 
 * { box-sizing: border-box; }
 html { background: var(--bg); }
-body { margin: 0; min-width: 320px; color: var(--ink); background: var(--bg); font-size: 14px; line-height: 1.45; }
+body { display: flex; flex-direction: column; min-height: 100vh; margin: 0; min-width: 320px; color: var(--ink); background: var(--bg); font-size: 14px; line-height: 1.45; }
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -115,18 +115,11 @@ button { cursor: pointer; }
 .moon-icon { fill: currentColor; stroke: none; }
 
 /* Layout */
-.shell { max-width: 1280px; margin: 0 auto; padding: 32px 24px 24px; }
-.page-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 24px; }
-.eyebrow { margin: 0 0 8px; color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: .08em; }
-h1 { margin: 0; font-size: clamp(26px, 3vw, 36px); line-height: 1.15; font-weight: 800; letter-spacing: -.025em; }
-.headline-second { color: var(--muted); font-weight: 600; }
-.heading-note { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--subtle); font-size: 13px; }
-.format-chip { padding: 5px 10px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--muted); background: var(--surface); font-size: 12px; font-weight: 600; }
-.format-chip.is-output { border-color: transparent; color: #fff; background: var(--accent); }
-.format-arrow { color: var(--orange); font-size: 17px; }
+/* The shell fills the window below the top bar so the footer sits at the bottom of short pages. */
+.shell { flex: 1; display: flex; flex-direction: column; width: 100%; max-width: 1280px; margin: 0 auto; padding: 32px 24px 24px; }
 
 /* Step 1: inputs only */
-.setup-view { max-width: 880px; margin: 0 auto; }
+.setup-view { width: 100%; max-width: 880px; margin: 0 auto; }
 .setup-card .section-heading { margin-bottom: 14px; }
 .folder-drop { width: 100%; display: grid; justify-items: center; gap: 6px; padding: 28px 20px; border: 1.5px dashed var(--accent); border-radius: 14px; color: var(--ink); background: var(--accent-soft); text-align: center; transition: background .15s, transform .15s; }
 .folder-drop:hover { transform: translateY(-1px); }
@@ -136,7 +129,7 @@ h1 { margin: 0; font-size: clamp(26px, 3vw, 36px); line-height: 1.15; font-weigh
 .folder-hint { color: var(--muted); font-size: 13px; }
 .setup-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0 14px; color: var(--subtle); font-size: 12px; font-weight: 600; }
 .setup-divider::before, .setup-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
-.setup-actions { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.setup-actions { display: flex; justify-content: flex-end; align-items: center; gap: 16px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
 
 /* Steps 2–4: context bar, activity tabs, then settings beside summary and chart */
 .workspace-view { display: grid; gap: 16px; }
@@ -159,19 +152,25 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
 
 /* Sources */
 .source-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.source-tile { position: relative; display: flex; flex-direction: column; min-height: 176px; padding: 16px; border: 1.5px dashed var(--line-strong); border-radius: 12px; background: var(--surface-2); transition: border-color .15s, background .15s, transform .15s; }
+.source-tile { position: relative; display: flex; flex-direction: column; min-height: 150px; padding: 16px; border: 1.5px dashed var(--line-strong); border-radius: 12px; background: var(--surface-2); transition: border-color .15s, background .15s, transform .15s; }
 .source-tile:hover, .source-tile.is-dragging { border-color: var(--accent); background: var(--accent-soft); }
 .source-kinomap:hover, .source-kinomap.is-dragging { border-color: var(--orange); background: var(--orange-soft); }
-.source-topline { display: flex; justify-content: space-between; align-items: center; }
-.source-number { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; color: #fff; background: var(--orange); font-size: 13px; font-weight: 800; }
+.source-topline { display: flex; align-items: center; gap: 11px; }
+.source-title { display: grid; gap: 1px; margin-right: auto; }
+.source-title h3 { margin: 0; font-size: 15px; font-weight: 700; }
+.source-format { color: var(--subtle); font-size: 12px; font-weight: 600; }
+.optional-badge { align-self: flex-start; padding: 3px 8px; border-radius: 999px; color: var(--muted); background: var(--surface); box-shadow: 0 0 0 1px var(--line) inset; font-size: 11px; font-weight: 600; }
+.source-number { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; color: #fff; background: var(--orange); }
+.source-number svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .watch-number { background: var(--accent); }
-.source-kind { color: var(--subtle); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
-.source-tile h3 { margin: 14px 0 4px; font-size: 15px; font-weight: 700; }
-.file-name { min-height: 19px; max-width: 100%; overflow: hidden; margin: 0; color: var(--muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.file-name { min-height: 19px; max-width: 100%; overflow: hidden; margin: 14px 0 0; color: var(--muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .file-name.has-file { color: var(--ink); font-weight: 600; }
 .outline-button { align-self: flex-start; margin-top: 12px; padding: 7px 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); font-size: 13px; font-weight: 600; transition: border-color .15s, color .15s; }
 .outline-button:hover { border-color: var(--accent); color: var(--accent); }
-.file-detail { margin: auto 0 0; padding-top: 10px; color: var(--subtle); font-size: 12px; }
+.file-detail { margin: 3px 0 0; color: var(--subtle); font-size: 12px; }
+.file-detail:empty { display: none; }
+.source-actions { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 14px; color: var(--subtle); font-size: 12px; }
+.source-actions .outline-button { margin-top: 0; color: var(--ink); }
 
 .mode-row { display: grid; gap: 8px; padding-bottom: 16px; }
 .mode-row .segmented { width: 100%; }
@@ -282,7 +281,11 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
 .notice.is-success::before { content: "✓"; display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; color: #fff; background: var(--success); font-size: 12px; }
 :root[data-theme="dark"] .notice.is-success::before { color: #052e16; }
 
-.footer-line { display: flex; justify-content: space-between; gap: 12px; margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--subtle); font-size: 12px; }
+.setup-view, .workspace-view { margin-bottom: 28px; }
+/* Step 1 sits in the middle of the window; the footer then follows the card's free space instead of taking it. */
+.setup-view:not([hidden]) { margin-block: auto; }
+.setup-view:not([hidden]) ~ .footer-line { margin-top: 28px; }
+.footer-line { display: flex; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line); color: var(--subtle); font-size: 12px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
 [hidden] { display: none !important; }
 
@@ -294,7 +297,6 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
   .topbar-inner, .shell { padding-inline: 16px; }
   .privacy { padding: 6px; font-size: 0; gap: 0; }
   .brand-light { display: none; }
-  .page-heading { flex-direction: column; align-items: flex-start; }
   .card { padding: 16px; }
   .source-grid { gap: 8px; }
   .source-tile { min-height: 160px; padding: 12px; }
