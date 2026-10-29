@@ -1,70 +1,12 @@
 import "./styles.css";
 import { buildWorkout, decodeGarminFit, defaultLapDistance, estimateOffset, lapDistancePresets, parseKinomap } from "./core.js";
-import { translations } from "./i18n.js";
-
-const byId = (id) => document.getElementById(id);
-const elements = {
-  kinomapInput: byId("kinomapInput"), fitInput: byId("fitInput"), folderInput: byId("folderInput"),
-  kinomapName: byId("kinomapName"), fitName: byId("fitName"), kinomapDetail: byId("kinomapDetail"), fitDetail: byId("fitDetail"),
-  offset: byId("offsetInput"), alignmentMode: byId("alignmentMode"), trimStart: byId("trimStart"), trimEnd: byId("trimEnd"),
-  lapPreset: byId("lapPreset"), lapCustomField: byId("lapCustomField"), lapDistance: byId("lapDistance"), lapNote: byId("lapNote"),
-  manualPanel: byId("manualDatePanel"), manualStart: byId("manualStart"), alignmentPanel: byId("alignmentPanel"),
-  alignmentHint: byId("alignmentHint"), estimateNote: byId("estimateNote"), notice: byId("notice"), liveState: byId("liveState"),
-  chart: byId("comparisonChart"), export: byId("exportButton"), startStamp: byId("startStamp"), activityName: byId("activityName"),
-  lightThemeButton: byId("lightThemeButton"), darkThemeButton: byId("darkThemeButton"), languageControl: byId("languageControl"),
-  languageButton: byId("languageButton"), languageCode: byId("languageCode"), languageMenu: byId("languageMenu"), languageFlag: byId("languageFlag"),
-};
-
-const state = {
-  kinomapFile: null,
-  kinomapText: null,
-  outputDirectoryHandle: null,
-  kinomap: null,
-  fitFile: null,
-  fit: null,
-  mode: "convert",
-  language: "cs",
-  result: null,
-  estimate: null,
-  error: null,
-};
-
-const zone = "Europe/Prague";
-const t = (key, values = {}) => Object.entries(values).reduce(
-  (text, [name, value]) => text.replaceAll(`{${name}}`, value),
-  translations[state.language][key] ?? key,
-);
-
-const sportLabel = (sport) => t(sport === "cycling" ? "cyclingIndoor" : sport === "running" ? "runningTreadmill" : "rowingIndoor");
-
-const knownMessages = {
-  "Čas v TCX nemá pásmo; vyložen jako Europe/Prague.": "timezoneTcx",
-  "Čas v PWX nemá pásmo; vyložen jako Europe/Prague.": "timezonePwx",
-  "Datum vypadá neplatně; zadejte místní začátek tréninku.": "invalidActivityDate",
-  "TCX neobsahuje watty.": "noPower",
-  "Po zarovnání a ořezu nezůstal společný časový úsek.": "estimateNoOverlap",
-  "Ve společném úseku nejsou dostatečné záznamy.": "estimateTooFew",
-  "Po ořezu nezůstal časový úsek.": "trimNoTime",
-  "Po ořezu nezůstaly dostatečné záznamy.": "trimTooFew",
-  "Soubor neobsahuje TCX aktivitu.": "tcxActivityMissing",
-  "TCX neobsahuje žádné trackpointy.": "tcxPointsMissing",
-  "Vybraný soubor není FIT.": "fitFileInvalid",
-  "FIT soubor neprošel kontrolou integrity.": "fitIntegrity",
-};
-
-function translateMessage(message) {
-  if (knownMessages[message]) return t(knownMessages[message]);
-  if (message.startsWith("FIT nelze načíst: ")) return t("fitRead", { message: message.slice("FIT nelze načíst: ".length) });
-  if (message.startsWith("TCX: ")) return t("needRecords", { label: "TCX" });
-  if (message.startsWith("PWX: ")) return t("needRecords", { label: "PWX" });
-  if (message.startsWith("FIT: ")) return t("needRecords", { label: "FIT" });
-  return message;
-}
-
-function applyStaticTranslations() {
-  for (const element of document.querySelectorAll("[data-i18n]")) element.textContent = t(element.dataset.i18n);
-  for (const element of document.querySelectorAll("[data-i18n-aria]")) element.setAttribute("aria-label", t(element.dataset.i18nAria));
-}
+import { collectDirectoryFiles, folderCandidates, titleFromKinomapFileName, withoutExportedFits } from "./files.js";
+import { drawChart } from "./ui/chart.js";
+import {
+  applyStaticTranslations, byId, displayNumber, elements, formatDuration, setNotice, sportLabel, state, t, translateMessage, zone,
+} from "./ui/context.js";
+import { exportFit } from "./ui/export.js";
+import { savedLanguage, savedTheme, setLanguageMenu, setTheme } from "./ui/preferences.js";
 
 function lapLabel(meters) {
   if (Math.abs(meters - 1609.344) < 1) return "1 mi";
@@ -111,72 +53,12 @@ function setLanguage(language, persist = true) {
   render();
 }
 
-function savedLanguage() {
-  try {
-    return localStorage.getItem("kinomap-fit-language") === "en" ? "en" : "cs";
-  } catch {
-    return "cs";
-  }
-}
-
 function dateInputValue(epochMs) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
     timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit",
     hour: "2-digit", minute: "2-digit", hourCycle: "h23",
   }).formatToParts(new Date(epochMs)).map((part) => [part.type, part.value]));
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
-}
-
-function nameFromKinomapFile(file) {
-  const title = file.name.replace(/\.(tcx|pwx)$/i, "").replace(/--\d+$/, "")
-    // Kinomap titles often carry emoji and full-width punctuation; keep letters, digits and plain punctuation.
-    .normalize("NFKC")
-    .replace(/[\p{Extended_Pictographic}\p{So}\p{Cf}\u{FE0E}\u{FE0F}\u{20E3}]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return `Kinomap - ${title || t("fallbackActivity")}`;
-}
-
-function setNotice(text = "", type = "") {
-  elements.notice.textContent = translateMessage(text);
-  elements.notice.hidden = !text;
-  elements.notice.className = `notice${type ? ` is-${type}` : ""}`;
-}
-
-function formatDuration(seconds) {
-  if (!Number.isFinite(seconds)) return "—";
-  const total = Math.round(seconds);
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const remainder = total % 60;
-  return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}` : `${minutes}:${String(remainder).padStart(2, "0")}`;
-}
-
-function displayNumber(value, digits = 0) {
-  const locale = state.language === "en" ? "en-GB" : "cs-CZ";
-  return Number.isFinite(value) ? new Intl.NumberFormat(locale, { maximumFractionDigits: digits }).format(value) : "—";
-}
-
-function setTheme(theme, persist = true) {
-  const isDark = theme === "dark";
-  document.documentElement.dataset.theme = isDark ? "dark" : "light";
-  elements.lightThemeButton.setAttribute("aria-pressed", String(!isDark));
-  elements.darkThemeButton.setAttribute("aria-pressed", String(isDark));
-  document.querySelector('meta[name="theme-color"]').content = isDark ? "#060a12" : "#0b1220";
-  if (persist) {
-    try {
-      localStorage.setItem("kinomap-fit-theme", isDark ? "dark" : "light");
-    } catch {}
-  }
-  drawChart();
-}
-
-function savedTheme() {
-  try {
-    return localStorage.getItem("kinomap-fit-theme") === "dark" ? "dark" : "light";
-  } catch {
-    return "light";
-  }
 }
 
 function resetSummary() {
@@ -245,7 +127,7 @@ async function loadKinomap(file, sourceDirectoryHandle = null) {
   state.outputDirectoryHandle = sourceDirectoryHandle;
   try {
     state.kinomapFile = file;
-    elements.activityName.value = nameFromKinomapFile(file);
+    elements.activityName.value = `Kinomap - ${titleFromKinomapFileName(file.name) || t("fallbackActivity")}`;
     state.kinomapText = await file.text();
     elements.manualStart.value = "";
     parseCurrentKinomap();
@@ -365,148 +247,8 @@ function render() {
   drawChart();
 }
 
-function chartSources() {
-  const kinomap = state.kinomap;
-  const fit = state.mode === "merge" ? state.fit : null;
-  if (!kinomap) return { kinomap: [], fit: [], startMs: 0, endMs: 1 };
-  const offsetMs = (Number(elements.offset.value) || 0) * 1000;
-  const isElapsed = elements.alignmentMode.value === "elapsed";
-  const shift = fit && isElapsed ? fit.startMs - kinomap.startMs : 0;
-  const source = kinomap.records.map((record) => ({
-    ...record, chartTime: record.timeMs + shift + offsetMs,
-  }));
-  const watch = fit?.records.map((record) => ({ ...record, chartTime: record.timeMs })) ?? [];
-  const startMs = state.result?.startMs ?? Math.min(source[0]?.chartTime ?? 0, watch[0]?.chartTime ?? Infinity);
-  const endMs = state.result?.endMs ?? Math.max(source.at(-1)?.chartTime ?? 1, watch.at(-1)?.chartTime ?? 0);
-  return { kinomap: source, fit: watch, startMs, endMs: Math.max(startMs + 1, endMs) };
-}
-
-function drawChart() {
-  const canvas = elements.chart;
-  if (!canvas || canvas.clientWidth === 0) return;
-  const ratio = window.devicePixelRatio || 1;
-  const width = canvas.clientWidth;
-  const height = canvas.clientHeight;
-  canvas.width = Math.round(width * ratio);
-  canvas.height = Math.round(height * ratio);
-  const context = canvas.getContext("2d");
-  context.scale(ratio, ratio);
-  context.clearRect(0, 0, width, height);
-
-  const sources = chartSources();
-  const running = state.kinomap?.sport === "running";
-  const cadenceMax = state.kinomap?.sport === "cycling" ? 140 : running ? 220 : 60;
-  const lanes = [
-    { key: "heartRate", title: t("heartRateLane"), unit: "bpm", min: 40, max: 200 },
-    running
-      ? { key: "speed", title: t("speedLane"), unit: "km/h", min: 0, max: 18, scale: 3.6 }
-      : { key: "power", title: t("powerLane"), unit: "W", min: 0, max: 400 },
-    { key: "cadence", title: t("cadenceLane"), unit: state.kinomap?.sport === "cycling" ? "rpm" : "spm", min: 0, max: cadenceMax },
-  ];
-  const left = 56;
-  const right = 10;
-  const top = 7;
-  const bottom = 5;
-  const laneGap = 9;
-  const laneHeight = (height - top - bottom - laneGap * 2) / 3;
-  const plotWidth = width - left - right;
-  const span = Math.max(1, sources.endMs - sources.startMs);
-  const theme = getComputedStyle(document.documentElement);
-  const colorKinomap = theme.getPropertyValue("--series-source").trim();
-  const colorFit = theme.getPropertyValue("--series-watch").trim();
-  const gridColor = theme.getPropertyValue("--chart-grid").trim();
-  const labelColor = theme.getPropertyValue("--chart-label").trim();
-  const subtleColor = theme.getPropertyValue("--chart-subtle").trim();
-
-  for (let laneIndex = 0; laneIndex < lanes.length; laneIndex += 1) {
-    const lane = lanes[laneIndex];
-    const laneTop = top + laneIndex * (laneHeight + laneGap);
-    const laneBottom = laneTop + laneHeight;
-    const scaleValue = (record) => record[lane.key] * (lane.scale ?? 1);
-    const sourceValues = [
-      ...sources.kinomap.map((record) => record[lane.key]),
-      ...sources.fit.map((record) => record[lane.key]),
-    ].filter(Number.isFinite).map((value) => value * (lane.scale ?? 1));
-    const maximum = (lane.key === "power" || lane.key === "speed") && sourceValues.length
-      ? Math.max(lane.max, Math.max(...sourceValues) * 1.08)
-      : lane.max;
-
-    context.strokeStyle = gridColor;
-    context.lineWidth = 1;
-    for (let grid = 0; grid < 3; grid += 1) {
-      const y = laneTop + grid * laneHeight / 2;
-      context.beginPath();
-      context.moveTo(left, y);
-      context.lineTo(width - right, y);
-      context.stroke();
-    }
-    context.fillStyle = labelColor;
-    context.font = "600 11px Inter, Segoe UI, system-ui, sans-serif";
-    context.fillText(lane.title, 0, laneTop + 12);
-    context.fillStyle = subtleColor;
-    context.font = "10px Inter, Segoe UI, system-ui, sans-serif";
-    context.fillText(lane.unit, 0, laneTop + 26);
-
-    const drawSeries = (records, color) => {
-      context.strokeStyle = color;
-      context.lineWidth = 2;
-      context.lineJoin = "round";
-      context.lineCap = "round";
-      context.beginPath();
-      let active = false;
-      let previousTime = null;
-      for (const record of records) {
-        const rawValue = record[lane.key];
-        if (!Number.isFinite(rawValue) || record.chartTime < sources.startMs || record.chartTime > sources.endMs) {
-          active = false;
-          continue;
-        }
-        const value = rawValue * (lane.scale ?? 1);
-        const x = left + ((record.chartTime - sources.startMs) / span) * plotWidth;
-        const y = laneBottom - Math.min(1, Math.max(0, (value - lane.min) / (maximum - lane.min))) * laneHeight;
-        if (!active || (previousTime != null && record.chartTime - previousTime > 10_000)) context.moveTo(x, y);
-        else context.lineTo(x, y);
-        active = true;
-        previousTime = record.chartTime;
-      }
-      context.stroke();
-    };
-    drawSeries(sources.fit, colorFit);
-    drawSeries(sources.kinomap, colorKinomap);
-  }
-}
-
-function folderCandidates(files) {
-  const all = [...files];
-  const kinomapFiles = all.filter((file) => /\.(tcx|pwx)$/i.test(file.name));
-  const fitFiles = all.filter((file) => /\.fit$/i.test(file.name));
-  const dateFor = (file) => file.webkitRelativePath?.match(/20\d{2}-\d{2}-\d{2}/)?.[0]
-    ?? file.name.match(/20\d{2}-\d{2}-\d{2}/)?.[0]
-    ?? new Date(file.lastModified).toISOString().slice(0, 10);
-  const pairs = new Map();
-  for (const file of kinomapFiles) pairs.set(dateFor(file), { ...(pairs.get(dateFor(file)) ?? {}), kinomap: file });
-  for (const file of fitFiles) pairs.set(dateFor(file), { ...(pairs.get(dateFor(file)) ?? {}), fit: file });
-  const complete = [...pairs.entries()].filter(([, pair]) => pair.kinomap && pair.fit).sort(([a], [b]) => b.localeCompare(a));
-  if (complete.length) return complete[0][1];
-  return {
-    kinomap: kinomapFiles.sort((a, b) => b.lastModified - a.lastModified)[0],
-    fit: fitFiles.sort((a, b) => b.lastModified - a.lastModified)[0],
-  };
-}
-
-// FIT files written by this tool carry manufacturer "development"; skip them so a previous export is never picked as the watch file.
-async function isExportedFit(file) {
-  try {
-    return decodeGarminFit(await file.arrayBuffer()).fileId?.manufacturer === "development";
-  } catch {
-    return false;
-  }
-}
-
 async function loadFolder(files) {
-  const all = [...files];
-  const exported = await Promise.all(all.map((file) => /\.fit$/i.test(file.name) && isExportedFit(file)));
-  const chosen = folderCandidates(all.filter((_, index) => !exported[index]));
+  const chosen = folderCandidates(await withoutExportedFits(files));
   if (!chosen.kinomap) {
     setNotice(t("noFolderKinomap"), "error");
     return;
@@ -520,26 +262,6 @@ async function loadFolder(files) {
   }
 }
 
-async function collectDirectoryFiles(directoryHandle, relativePath = "", files = []) {
-  for await (const [name, entry] of directoryHandle.entries()) {
-    const entryPath = relativePath ? `${relativePath}/${name}` : name;
-    if (entry.kind === "directory") {
-      await collectDirectoryFiles(entry, entryPath, files);
-    } else if (/\.(tcx|pwx|fit)$/i.test(name)) {
-      const file = await entry.getFile();
-      files.push({
-        name: file.name,
-        lastModified: file.lastModified,
-        webkitRelativePath: entryPath,
-        sourceDirectoryHandle: directoryHandle,
-        text: () => file.text(),
-        arrayBuffer: () => file.arrayBuffer(),
-      });
-    }
-  }
-  return files;
-}
-
 async function chooseFolder() {
   if (typeof window.showDirectoryPicker !== "function") {
     elements.folderInput.click();
@@ -550,56 +272,6 @@ async function chooseFolder() {
     await loadFolder(await collectDirectoryFiles(directoryHandle));
   } catch (error) {
     if (error.name !== "AbortError") setNotice(error.message, "error");
-  }
-}
-
-function downloadFit(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.append(link);
-  link.click();
-  window.setTimeout(() => {
-    link.remove();
-    URL.revokeObjectURL(url);
-  }, 1000);
-}
-
-async function exportFit() {
-  if (!state.result) return;
-  const safeName = (elements.activityName.value || state.result.activityName || t("fallbackActivity"))
-    .trim()
-    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-")
-    .replace(/[. ]+$/g, "") || t("fallbackActivity");
-  const filename = `${safeName}.fit`;
-  const blob = new Blob([state.result.fitBytes], { type: "application/octet-stream" });
-  let saveFallbackMessage = "";
-  if (state.outputDirectoryHandle) {
-    setNotice(t("savingBesideFiles"));
-    try {
-      let permission = await state.outputDirectoryHandle.queryPermission?.({ mode: "readwrite" });
-      if (permission !== "granted") permission = await state.outputDirectoryHandle.requestPermission({ mode: "readwrite" });
-      if (permission === "granted") {
-        const fileHandle = await state.outputDirectoryHandle.getFileHandle(filename, { create: true });
-        const writable = await fileHandle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        setNotice(t("savedBesideFiles"), "success");
-        return;
-      }
-      saveFallbackMessage = t("savePermissionDenied");
-    } catch (error) {
-      saveFallbackMessage = error.message;
-    }
-  }
-  try {
-    downloadFit(blob, filename);
-    setNotice(saveFallbackMessage
-      ? t("saveFallbackStarted", { message: saveFallbackMessage })
-      : t("downloadStarted", { filename }), saveFallbackMessage ? "" : "success");
-  } catch (error) {
-    setNotice(t("exportFailed", { message: error.message }), "error");
   }
 }
 
@@ -631,11 +303,6 @@ byId("autoOffsetButton").addEventListener("click", offsetEstimate);
 elements.export.addEventListener("click", exportFit);
 elements.lightThemeButton.addEventListener("click", () => setTheme("light"));
 elements.darkThemeButton.addEventListener("click", () => setTheme("dark"));
-function setLanguageMenu(open) {
-  elements.languageMenu.hidden = !open;
-  elements.languageButton.setAttribute("aria-expanded", String(open));
-}
-
 elements.languageButton.addEventListener("click", () => setLanguageMenu(elements.languageMenu.hidden));
 elements.languageButton.addEventListener("keydown", (event) => {
   if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
