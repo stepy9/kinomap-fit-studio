@@ -128,7 +128,12 @@ function dateInputValue(epochMs) {
 }
 
 function nameFromKinomapFile(file) {
-  const title = file.name.replace(/\.(tcx|pwx)$/i, "").replace(/--\d+$/, "").trim();
+  const title = file.name.replace(/\.(tcx|pwx)$/i, "").replace(/--\d+$/, "")
+    // Kinomap titles often carry emoji and full-width punctuation; keep letters, digits and plain punctuation.
+    .normalize("NFKC")
+    .replace(/[\p{Extended_Pictographic}\p{So}\p{Cf}\u{FE0E}\u{FE0F}\u{20E3}]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   return `Kinomap - ${title || t("fallbackActivity")}`;
 }
 
