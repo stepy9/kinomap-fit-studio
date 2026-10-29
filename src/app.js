@@ -218,7 +218,8 @@ function parseCurrentKinomap(manual = false) {
 async function loadKinomap(file, sourceDirectoryHandle = null, { keepBatch = false } = {}) {
   if (!file) return;
   if (!keepBatch && state.batch) {
-    state.batch = null;
+    // Leaving the folder also drops the watch FIT paired with its open activity.
+    Object.assign(state, { batch: null, fit: null, fitFile: null, estimate: null, mode: "convert" });
     renderBatch();
   }
   state.error = null;
@@ -301,9 +302,28 @@ function renderSummary(summary, startMs, sport) {
   }).format(new Date(startMs));
 }
 
+// Step 1 shows only the inputs; once a recording is open the workspace replaces it until "Change files".
+function showView(view) {
+  const setup = view === "setup";
+  byId("setupView").hidden = !setup;
+  byId("workspaceView").hidden = setup;
+  byId(setup ? "setupNoticeSlot" : "workspaceNoticeSlot").append(elements.notice);
+  window.scrollTo({ top: 0 });
+  drawChart();
+}
+
+function updateContext() {
+  byId("continueButton").disabled = !state.kinomap;
+  const files = [state.kinomapFile?.name, state.fitFile?.name].filter(Boolean).join(" + ");
+  byId("contextSummary").textContent = state.batch
+    ? `${t("contextFolder", { count: state.batch.items.length })} · ${files}`
+    : files;
+}
+
 function render() {
   updateModeButtons();
   updateFileRows();
+  updateContext();
   state.result = null;
   elements.export.disabled = true;
   elements.liveState.classList.remove("is-ready");
@@ -365,6 +385,7 @@ async function loadFolder(files) {
     await loadKinomap(first.kinomapFile, first.directoryHandle);
     if (first.fitFile) await loadFit(first.fitFile);
   }
+  if (state.kinomap) showView("workspace");
 }
 
 async function chooseFolder() {
@@ -381,6 +402,8 @@ async function chooseFolder() {
 }
 
 byId("kinomapButton").addEventListener("click", () => elements.kinomapInput.click());
+byId("continueButton").addEventListener("click", () => showView("workspace"));
+byId("changeFilesButton").addEventListener("click", () => showView("setup"));
 byId("fitButton").addEventListener("click", () => elements.fitInput.click());
 byId("folderButton").addEventListener("click", chooseFolder);
 elements.kinomapInput.addEventListener("change", (event) => loadKinomap(event.target.files[0]));

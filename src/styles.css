@@ -123,8 +123,30 @@ h1 { margin: 0; font-size: clamp(26px, 3vw, 36px); line-height: 1.15; font-weigh
 .format-chip.is-output { border-color: transparent; color: #fff; background: var(--accent); }
 .format-arrow { color: var(--orange); font-size: 17px; }
 
-.workspace { display: grid; grid-template-columns: minmax(360px, 5fr) minmax(0, 7fr); gap: 20px; align-items: start; }
-.controls, .preview { min-width: 0; display: grid; gap: 20px; }
+/* Step 1: inputs only */
+.setup-view { max-width: 880px; margin: 0 auto; }
+.setup-card .section-heading { margin-bottom: 14px; }
+.folder-drop { width: 100%; display: grid; justify-items: center; gap: 6px; padding: 28px 20px; border: 1.5px dashed var(--accent); border-radius: 14px; color: var(--ink); background: var(--accent-soft); text-align: center; transition: background .15s, transform .15s; }
+.folder-drop:hover { transform: translateY(-1px); }
+.folder-icon { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 12px; background: var(--accent); }
+.folder-icon svg, .context-icon svg { width: 24px; height: 24px; fill: none; stroke: #fff; stroke-width: 1.9; stroke-linejoin: round; }
+.folder-title { font-size: 17px; font-weight: 700; }
+.folder-hint { color: var(--muted); font-size: 13px; }
+.setup-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0 14px; color: var(--subtle); font-size: 12px; font-weight: 600; }
+.setup-divider::before, .setup-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.setup-actions { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+
+/* Steps 2–4: context bar, activity tabs, then settings beside summary and chart */
+.workspace-view { display: grid; gap: 16px; }
+.context-bar { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.context-icon { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 auto; border-radius: 9px; background: var(--accent); }
+.context-icon svg { width: 18px; height: 18px; }
+.context-summary { min-width: 0; margin-right: auto; overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.context-bar .outline-button { margin-top: 0; }
+.editor { display: grid; grid-template-columns: 410px minmax(0, 1fr); gap: 16px; align-items: start; }
+.settings-card { position: sticky; top: 76px; }
+/* Grid items default to min-width: auto; without this the tab strip or chart would widen their column. */
+.workspace-view > *, .editor > * { min-width: 0; }
 .card { padding: 22px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
 
 .section-heading { display: flex; align-items: center; gap: 11px; margin-bottom: 18px; }
@@ -149,7 +171,9 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
 .outline-button:hover { border-color: var(--accent); color: var(--accent); }
 .file-detail { margin: auto 0 0; padding-top: 10px; color: var(--subtle); font-size: 12px; }
 
-.mode-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.mode-row { display: grid; gap: 8px; padding-bottom: 16px; }
+.mode-row .segmented { width: 100%; }
+.mode-row .mode-button { flex: 1; }
 .field-label { color: var(--ink); font-size: 13px; font-weight: 700; }
 .segmented { display: flex; padding: 3px; border-radius: 10px; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line) inset; }
 .mode-button { padding: 8px 14px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; font-size: 13px; font-weight: 600; transition: background .15s, color .15s; }
@@ -162,6 +186,7 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
 .panel-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .alignment-hint, .field-unit, .estimate-note { overflow: hidden; color: var(--subtle); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.alignment-grid { grid-template-columns: minmax(0, 1fr) 110px; }
 .field { display: grid; gap: 6px; min-width: 0; }
 .field > span { color: var(--muted); font-size: 12px; font-weight: 600; }
 .field input, .field select { width: 100%; height: 40px; min-width: 0; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink); background: var(--surface); font-size: 14px; transition: border-color .15s, box-shadow .15s; }
@@ -199,12 +224,10 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
 .chart-legend i { width: 14px; height: 3px; border-radius: 2px; }
 .legend-watch { background: var(--series-watch); }
 .legend-source { background: var(--series-source); }
-#comparisonChart { display: block; width: 100%; height: 300px; }
+#comparisonChart { display: block; width: 100%; height: 360px; }
 .chart-axis { display: flex; justify-content: space-between; margin-top: 6px; color: var(--subtle); font-size: 11px; }
 
 /* Batch tabs */
-/* Grid items default to min-width: auto, so the scrolling tab strip would otherwise widen the whole preview column. */
-.preview > .card { min-width: 0; }
 .batch-card { padding-bottom: 16px; }
 .batch-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
 .batch-header .estimate-note { margin-right: auto; }
@@ -225,12 +248,14 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
 .batch-tab-status.is-busy { color: var(--accent); }
 
 /* Summary */
-.summary-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
-.summary-cell { grid-column: span 2; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 12px; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line) inset; }
-.summary-cell:not(.is-primary) { grid-column: span 3; }
+/* Three headline figures on the first row, the four averages below. */
+.summary-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; margin-bottom: 20px; }
+.summary-cell { grid-column: span 3; }
+.summary-cell.is-primary { grid-column: span 4; }
+.summary-cell { min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 12px; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line) inset; }
 .summary-cell > span { color: var(--muted); font-size: 12px; font-weight: 600; }
-.summary-cell strong { overflow: hidden; font: 700 18px/1.2 var(--num); font-variant-numeric: tabular-nums; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
-.summary-cell.is-primary strong { font-size: 28px; letter-spacing: -.02em; }
+.summary-cell strong { overflow: hidden; font: 700 16px/1.2 var(--num); font-variant-numeric: tabular-nums; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
+.summary-cell.is-primary strong { font-size: 26px; letter-spacing: -.02em; }
 .summary-extra { color: var(--muted); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .export-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
 .start-stamp { display: grid; gap: 3px; min-width: 0; }
@@ -252,7 +277,8 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
 [hidden] { display: none !important; }
 
 @media (max-width: 1000px) {
-  .workspace { grid-template-columns: 1fr; }
+  .editor { grid-template-columns: 1fr; }
+  .settings-card { position: static; }
 }
 @media (max-width: 640px) {
   .topbar-inner, .shell { padding-inline: 16px; }
