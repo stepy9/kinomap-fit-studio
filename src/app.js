@@ -49,6 +49,7 @@ function renderTrimStatus() {
 
 // Each activity starts untrimmed, or with the trim its tab already had.
 function resetTrim(settings = {}) {
+  state.lapIntensities = settings.lapIntensities ?? [];
   elements.trimStart.value = settings.trimStartSeconds ?? "0";
   elements.trimEnd.value = settings.trimEndSeconds ?? "0";
   showTrim(Number(elements.trimStart.value) > 0 || Number(elements.trimEnd.value) > 0);
@@ -62,7 +63,9 @@ function applySavedLapDistance(sport) {
   elements.lapCustomField.hidden = elements.lapPreset.value !== "custom";
 }
 
+// A new lap distance renumbers the laps, so their warm-up and cool-down marks start over.
 function saveLapDistance() {
+  state.lapIntensities = [];
   const sport = state.kinomap?.sport;
   if (!sport) return;
   saveDefaults({ laps: { ...savedDefaults().laps, [sport]: { preset: elements.lapPreset.value, custom: elements.lapDistance.value } } });
@@ -215,6 +218,7 @@ function currentSettings() {
     lapDistanceMeters: lapDistanceValue(),
     sources: metricSources(),
     ...feelSettings(),
+    lapIntensities: state.lapIntensities,
     zoneChoice: state.zoneChoice,
     activityName: elements.activityName.value,
     manualStart: elements.manualStart.value || undefined,
@@ -231,6 +235,7 @@ function applySettings(settings) {
   elements.activityName.value = settings.activityName;
   setMetricSources(settings.sources);
   setFeel(settings);
+  state.lapIntensities = settings.lapIntensities ?? [];
   state.zoneChoice = settings.zoneChoice ?? null;
   if (settings.manualStart) {
     elements.manualStart.value = settings.manualStart;
@@ -515,6 +520,23 @@ function speedText(speed, sport) {
   return sport === "rowing" ? `${formatDuration(500 / speed)} /500 m` : `${formatDuration(1000 / speed)} min/km`;
 }
 
+// Lap types marked in the lap table, by lap number; Garmin shows warm-up and cool-down laps apart from the work.
+const lapIntensityOptions = [["warmup", "intensityWarmup"], ["active", "intensityActive"], ["rest", "intensityRest"], ["cooldown", "intensityCooldown"]];
+
+function intensitySelect(lap, index) {
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", `${t("lapType")} ${index + 1}`);
+  select.append(...lapIntensityOptions.map(([value, key]) => new Option(t(key), value)));
+  select.value = lap.intensity;
+  select.addEventListener("change", () => {
+    const intensities = [...state.lapIntensities];
+    intensities[index] = select.value;
+    state.lapIntensities = intensities;
+    render();
+  });
+  return select;
+}
+
 // The laps written to the FIT, as Garmin Connect will list them.
 function renderLaps(laps, sport) {
   const panel = byId("lapsPanel");
@@ -523,6 +545,7 @@ function renderLaps(laps, sport) {
   const value = (number, unit = "", digits = 0) => (number == null ? "—" : `${displayNumber(number, digits)}${unit}`);
   const columns = [
     [t("lapColumn"), (lap, index) => String(index + 1)],
+    [t("lapType"), (lap, index) => intensitySelect(lap, index)],
     [t("lapTime"), (lap) => formatDuration(lap.timerSeconds)],
     [t("lapDistanceColumn"), (lap) => (lap.distance >= 1000 ? value(lap.distance / 1000, " km", 2) : value(lap.distance, " m"))],
     [sport === "cycling" ? t("lapSpeed") : t("lapPace"), (lap) => speedText(lap.avgSpeed, sport)],
@@ -538,7 +561,14 @@ function renderLaps(laps, sport) {
   head.append(...columns.map(([title]) => Object.assign(document.createElement("th"), { textContent: title })));
   const rows = laps.map((lap, index) => {
     const row = document.createElement("tr");
-    row.append(...columns.map(([, cell]) => Object.assign(document.createElement("td"), { textContent: cell(lap, index) })));
+    row.className = `is-${lap.intensity}`;
+    row.append(...columns.map(([, cell]) => {
+      const content = cell(lap, index);
+      const td = document.createElement("td");
+      if (content instanceof Node) td.append(content);
+      else td.textContent = content;
+      return td;
+    }));
     return row;
   });
   byId("lapsTable").replaceChildren(head, ...rows);
@@ -646,6 +676,7 @@ function render() {
           lapDistanceMeters: lapDistanceValue(),
           sources: metricSources(),
           ...feelSettings(),
+          lapIntensities: state.lapIntensities,
           activityName: elements.activityName.value,
         },
       );

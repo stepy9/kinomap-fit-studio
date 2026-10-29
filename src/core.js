@@ -425,7 +425,9 @@ export function buildWorkout(kinomap, fit = null, options = {}) {
   const lapDistance = options.lapDistanceMeters == null || options.lapDistanceMeters === ""
     ? defaultLapDistance(kinomap.sport)
     : Math.max(0, Number(options.lapDistanceMeters) || 0);
-  const laps = lapsFor(records, lapDistance, calories, timerSeconds, kinomap.sport);
+  // Each lap can be marked as warm-up, rest or cool-down; unmarked laps stay active.
+  const laps = lapsFor(records, lapDistance, calories, timerSeconds, kinomap.sport)
+    .map((lap, index) => ({ ...lap, intensity: options.lapIntensities?.[index] || "active" }));
   const activityName = String(options.activityName ?? "Kinomap - Rowing Workout").trim();
   const fitBytes = encodeFit(records, summary, laps, startMs, endMs, timeZone, activityName, kinomap.sport, kinomap.subSport);
   return {

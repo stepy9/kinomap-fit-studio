@@ -429,3 +429,10 @@ test("writes how the workout felt to the FIT session, mid values by default", ()
   assert.equal(empty.workoutFeel, undefined);
   assert.equal(empty.workoutRpe, undefined);
 });
+
+test("marks laps as warm-up or cool-down in the FIT", () => {
+  const fixture = fixtures.find((item) => item.sport === "rowing");
+  const workout = buildWorkout(fixtureKinomap(fixture), null, { lapIntensities: ["warmup", "", "", "cooldown"] });
+  const laps = roundTrip(workout.fitBytes).lapMesgs;
+  assert.deepEqual(laps.map((lap) => lap.intensity), ["warmup", "active", "active", "cooldown"]);
+});

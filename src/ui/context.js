@@ -35,6 +35,8 @@ export const state = {
   batch: null,
   // Zone picked by hand for the open activity; null follows the watch or the computer.
   zoneChoice: null,
+  // Lap types chosen in the lap table, by lap number.
+  lapIntensities: [],
 };
 
 // Output time zone: reads timestamps without a zone, sets the FIT local time and every displayed clock.

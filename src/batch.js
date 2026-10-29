@@ -96,6 +96,7 @@ export function buildBatchWorkout(item, settings = {}) {
     trimEndSeconds: settings.trimEndSeconds,
     lapDistanceMeters: settings.lapDistanceMeters,
     sources: settings.sources,
+    lapIntensities: settings.lapIntensities,
     workoutFeel: settings.workoutFeel,
     workoutRpe: settings.workoutRpe,
     activityName: settings.activityName ?? `Kinomap - ${item.title}`,

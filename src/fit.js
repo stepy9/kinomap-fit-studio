@@ -151,7 +151,7 @@ export function encodeFit(records, summary, laps, startMs, endMs, timeZone = "Eu
       ...summaryFieldsFor(lap, lap.startMs, lap.endMs, sport, subSport),
       event: "lap",
       eventType: "stop",
-      intensity: "active",
+      intensity: lap.intensity ?? "active",
       lapTrigger: index === laps.length - 1 ? "sessionEnd" : "distance",
     });
   });
