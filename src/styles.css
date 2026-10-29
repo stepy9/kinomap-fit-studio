@@ -116,7 +116,7 @@ button { cursor: pointer; }
 
 /* Layout */
 /* The shell fills the window below the top bar so the footer sits at the bottom of short pages. */
-.shell { flex: 1; display: flex; flex-direction: column; width: 100%; max-width: 1280px; margin: 0 auto; padding: 32px 24px 24px; }
+.shell { flex: 1; display: flex; flex-direction: column; width: 100%; max-width: 1280px; margin: 0 auto; padding: 20px 24px 16px; }
 
 /* Step 1: inputs only */
 .setup-view { width: 100%; max-width: 880px; margin: 0 auto; }
@@ -281,7 +281,7 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
 .notice.is-success::before { content: "✓"; display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; color: #fff; background: var(--success); font-size: 12px; }
 :root[data-theme="dark"] .notice.is-success::before { color: #052e16; }
 
-.setup-view, .workspace-view { margin-bottom: 28px; }
+.setup-view, .workspace-view { margin-bottom: 16px; }
 /* Step 1 sits in the middle of the window; the footer then follows the card's free space instead of taking it. */
 .setup-view:not([hidden]) { margin-block: auto; }
 .setup-view:not([hidden]) ~ .footer-line { margin-top: 28px; }
