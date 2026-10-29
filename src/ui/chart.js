@@ -4,6 +4,8 @@ import { byId, clockTime, elements, formatDuration, state, t } from "./context.j
 const handleHitPx = 10;
 const minimumWindowMs = 10_000;
 let layout = null;
+// Series hidden from the legend; both recordings are shown by default.
+const hiddenSeries = new Set();
 
 function chartSources() {
   const kinomap = state.kinomap;
@@ -15,7 +17,11 @@ function chartSources() {
   const source = kinomap.records.map((record) => ({
     ...record, chartTime: record.timeMs + shift + offsetMs,
   }));
-  const watch = fit?.records.map((record) => ({ ...record, chartTime: record.timeMs })) ?? [];
+  // Watch FIT stores running cadence per leg; the chart shows steps/min like the export.
+  const cadenceScale = kinomap.sport === "running" ? 2 : 1;
+  const watch = fit?.records.map((record) => ({
+    ...record, chartTime: record.timeMs, cadence: record.cadence == null ? null : record.cadence * cadenceScale,
+  })) ?? [];
   // Without trim the export covers the overlap of both recordings, or the whole Kinomap one when converting.
   let startMs = source[0]?.chartTime ?? 0;
   let endMs = source.at(-1)?.chartTime ?? 1;
@@ -92,21 +98,30 @@ export function drawChart() {
   context.clearRect(0, 0, width, height);
 
   const sources = chartSources();
-  const running = state.kinomap?.sport === "running";
-  const cadenceMax = state.kinomap?.sport === "cycling" ? 140 : running ? 220 : 60;
+  const sport = state.kinomap?.sport;
+  const cadenceMax = sport === "cycling" ? 140 : sport === "running" ? 220 : 60;
+  // Pace lanes are drawn in seconds per 500 m or per km with faster pace at the top, as Garmin does.
+  const paceLane = (meters, unit, fastest, slowest) => ({
+    key: "speed", title: t("paceLane"), unit, min: fastest, max: slowest, invert: true,
+    value: (speed) => (speed > 0 ? meters / speed : null),
+  });
   const lanes = [
     { key: "heartRate", title: t("heartRateLane"), unit: "bpm", min: 40, max: 200 },
-    running
-      ? { key: "speed", title: t("speedLane"), unit: "km/h", min: 0, max: 18, scale: 3.6 }
-      : { key: "power", title: t("powerLane"), unit: "W", min: 0, max: 400 },
-    { key: "cadence", title: t("cadenceLane"), unit: state.kinomap?.sport === "cycling" ? "rpm" : "spm", min: 0, max: cadenceMax },
-  ];
+    sport === "cycling"
+      ? { key: "speed", title: t("speedLane"), unit: "km/h", min: 0, max: 50, scale: 3.6, grow: true }
+      : sport === "running" ? paceLane(1000, "min/km", 180, 480) : paceLane(500, "min/500 m", 90, 210),
+    // Treadmill runs show power only when a recording carries it.
+    sport === "running" && ![...sources.kinomap, ...sources.fit].some((record) => record.power != null)
+      ? null
+      : { key: "power", title: t("powerLane"), unit: "W", min: 0, max: 400, grow: true },
+    { key: "cadence", title: t("cadenceLane"), unit: sport === "cycling" ? "rpm" : "spm", min: 0, max: cadenceMax },
+  ].filter(Boolean);
   const left = 56;
   const right = 10;
   const top = 7;
   const bottom = 5;
   const laneGap = 9;
-  const laneHeight = (height - top - bottom - laneGap * 2) / 3;
+  const laneHeight = (height - top - bottom - laneGap * (lanes.length - 1)) / lanes.length;
   const plotWidth = width - left - right;
   const span = Math.max(1, sources.endMs - sources.startMs);
   const theme = getComputedStyle(document.documentElement);
@@ -121,11 +136,12 @@ export function drawChart() {
     const lane = lanes[laneIndex];
     const laneTop = top + laneIndex * (laneHeight + laneGap);
     const laneBottom = laneTop + laneHeight;
+    const laneValue = (raw) => (lane.value ? lane.value(raw) : raw * (lane.scale ?? 1));
     const sourceValues = [
       ...sources.kinomap.map((record) => record[lane.key]),
       ...sources.fit.map((record) => record[lane.key]),
-    ].filter(Number.isFinite).map((value) => value * (lane.scale ?? 1));
-    const maximum = (lane.key === "power" || lane.key === "speed") && sourceValues.length
+    ].filter(Number.isFinite).map(laneValue).filter(Number.isFinite);
+    const maximum = lane.grow && sourceValues.length
       ? Math.max(lane.max, Math.max(...sourceValues) * 1.08)
       : lane.max;
 
@@ -159,9 +175,14 @@ export function drawChart() {
           active = false;
           continue;
         }
-        const value = rawValue * (lane.scale ?? 1);
+        const value = laneValue(rawValue);
+        if (!Number.isFinite(value)) {
+          active = false;
+          continue;
+        }
         const x = left + ((record.chartTime - sources.startMs) / span) * plotWidth;
-        const y = laneBottom - Math.min(1, Math.max(0, (value - lane.min) / (maximum - lane.min))) * laneHeight;
+        const share = Math.min(1, Math.max(0, (value - lane.min) / (maximum - lane.min)));
+        const y = laneBottom - (lane.invert ? 1 - share : share) * laneHeight;
         if (!active || (previousTime != null && record.chartTime - previousTime > 10_000)) context.moveTo(x, y);
         else context.lineTo(x, y);
         active = true;
@@ -169,8 +190,8 @@ export function drawChart() {
       }
       context.stroke();
     };
-    drawSeries(sources.fit, colorFit);
-    drawSeries(sources.kinomap, colorKinomap);
+    if (!hiddenSeries.has("watch")) drawSeries(sources.fit, colorFit);
+    if (!hiddenSeries.has("kinomap")) drawSeries(sources.kinomap, colorKinomap);
   }
 
   layout = state.kinomap
@@ -194,6 +215,18 @@ function handleAt(clientX) {
   const distances = [["start", Math.abs(x - xFor(trim.windowStart))], ["end", Math.abs(x - xFor(trim.windowEnd))]]
     .sort((a, b) => a[1] - b[1]);
   return distances[0][1] <= handleHitPx ? distances[0][0] : null;
+}
+
+export function setupChartLegend() {
+  for (const button of document.querySelectorAll(".chart-legend [data-series]")) {
+    button.addEventListener("click", () => {
+      const series = button.dataset.series;
+      if (hiddenSeries.has(series)) hiddenSeries.delete(series);
+      else hiddenSeries.add(series);
+      button.setAttribute("aria-pressed", String(!hiddenSeries.has(series)));
+      drawChart();
+    });
+  }
 }
 
 // Dragging a handle writes whole seconds into the trim inputs, which stay the source of truth for the export.

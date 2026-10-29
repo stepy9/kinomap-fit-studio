@@ -244,11 +244,13 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
 .chart-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .chart-title { color: var(--muted); font-size: 13px; font-weight: 600; }
 .chart-legend { display: flex; gap: 16px; color: var(--muted); font-size: 12px; }
-.chart-legend span { display: flex; align-items: center; gap: 6px; }
+.chart-legend button { display: flex; align-items: center; gap: 6px; margin: -4px -6px; padding: 4px 6px; border: 0; border-radius: 6px; color: inherit; background: none; cursor: pointer; }
+.chart-legend button:hover { color: var(--ink); background: var(--surface-2); }
+.chart-legend button[aria-pressed="false"] { opacity: .45; text-decoration: line-through; }
 .chart-legend i { width: 14px; height: 3px; border-radius: 2px; }
 .legend-watch { background: var(--series-watch); }
 .legend-source { background: var(--series-source); }
-#comparisonChart { display: block; width: 100%; height: 360px; touch-action: none; }
+#comparisonChart { display: block; width: 100%; height: 440px; touch-action: none; }
 .chart-hint { margin-left: 10px; color: var(--subtle); font-size: 12px; font-weight: 500; }
 .chart-axis { display: flex; justify-content: space-between; margin-top: 6px; color: var(--subtle); font-size: 11px; }
 
@@ -331,7 +333,7 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
   .source-tile { min-height: 0; padding: 14px; }
   .mode-row { flex-direction: column; align-items: stretch; }
   .mode-button { flex: 1; padding-inline: 6px; }
-  #comparisonChart { height: 240px; }
+  #comparisonChart { height: 320px; }
   .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .summary-cell, .summary-cell.is-primary { grid-column: span 1; }
   .summary-cell.is-primary:first-child { grid-column: span 2; }

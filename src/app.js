@@ -4,7 +4,7 @@ import { buildBatchWorkout, planBatch } from "./batch.js";
 import { checkWorkout } from "./checks.js";
 import { collectDirectoryFiles, fitFileName, titleFromKinomapFileName } from "./files.js";
 import { renderBatchTabs } from "./ui/batch.js";
-import { drawChart, setupChartTrim } from "./ui/chart.js";
+import { drawChart, setupChartLegend, setupChartTrim } from "./ui/chart.js";
 import {
   applyStaticTranslations, byId, displayNumber, elements, formatDuration, setNotice, sportLabel, state, t, timeRange, translateMessage, setZone, zone,
 } from "./ui/context.js";
@@ -679,6 +679,7 @@ for (const button of document.querySelectorAll(".mode-button")) {
 }
 
 setupChartTrim(render);
+setupChartLegend();
 const observer = new ResizeObserver(drawChart);
 observer.observe(elements.chart);
 setTheme(savedTheme(), false);
