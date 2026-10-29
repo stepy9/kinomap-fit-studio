@@ -1,11 +1,13 @@
 import "./styles.css";
 import { buildWorkout, decodeGarminFit, defaultLapDistance, estimateOffset, lapDistancePresets, parseKinomap } from "./core.js";
-import { collectDirectoryFiles, folderCandidates, titleFromKinomapFileName, withoutExportedFits } from "./files.js";
+import { buildBatchWorkout, planBatch } from "./batch.js";
+import { collectDirectoryFiles, fitFileName, titleFromKinomapFileName } from "./files.js";
+import { renderBatchTabs } from "./ui/batch.js";
 import { drawChart } from "./ui/chart.js";
 import {
   applyStaticTranslations, byId, displayNumber, elements, formatDuration, setNotice, sportLabel, state, t, translateMessage, zone,
 } from "./ui/context.js";
-import { exportFit } from "./ui/export.js";
+import { exportFit, saveFit } from "./ui/export.js";
 import { savedLanguage, savedTheme, setLanguageMenu, setTheme } from "./ui/preferences.js";
 
 function lapLabel(meters) {
@@ -50,7 +52,98 @@ function setLanguage(language, persist = true) {
       localStorage.setItem("kinomap-fit-language", state.language);
     } catch {}
   }
+  renderBatch();
   render();
+}
+
+// Each folder activity keeps its own editor settings while the user switches between preview tabs.
+function currentSettings() {
+  return {
+    mode: state.mode,
+    alignmentMode: elements.alignmentMode.value,
+    offsetSeconds: Number(elements.offset.value) || 0,
+    trimStartSeconds: elements.trimStart.value,
+    trimEndSeconds: elements.trimEnd.value,
+    lapPreset: elements.lapPreset.value,
+    customLapDistance: elements.lapDistance.value,
+    lapDistanceMeters: lapDistanceValue(),
+    activityName: elements.activityName.value,
+    manualStart: elements.manualStart.value || undefined,
+  };
+}
+
+function applySettings(settings) {
+  state.mode = settings.mode;
+  elements.alignmentMode.value = settings.alignmentMode;
+  elements.offset.value = String(settings.offsetSeconds);
+  elements.trimStart.value = settings.trimStartSeconds;
+  elements.trimEnd.value = settings.trimEndSeconds;
+  renderLapOptions(state.kinomap?.sport, settings.lapPreset);
+  elements.lapDistance.value = settings.customLapDistance;
+  elements.activityName.value = settings.activityName;
+  if (settings.manualStart) {
+    elements.manualStart.value = settings.manualStart;
+    parseCurrentKinomap(true);
+  }
+}
+
+function activeBatchItem() {
+  return state.batch?.items.find((item) => item.id === state.batch.activeId) ?? null;
+}
+
+function renderBatch() {
+  renderBatchTabs({
+    onSelect: selectBatchItem,
+    onToggle: (item, selected) => {
+      item.selected = selected;
+      renderBatch();
+    },
+  });
+}
+
+async function selectBatchItem(item) {
+  const active = activeBatchItem();
+  if (active === item) return;
+  if (active && state.kinomap) active.settings = currentSettings();
+  state.batch.activeId = item.id;
+  state.fit = null;
+  state.fitFile = null;
+  state.estimate = null;
+  state.mode = "convert";
+  elements.offset.value = "0";
+  elements.estimateNote.textContent = t("estimatePending");
+  renderBatch();
+  await loadKinomap(item.kinomapFile, item.directoryHandle, { keepBatch: true });
+  if (item.fitFile) await loadFit(item.fitFile);
+  if (item.settings) {
+    applySettings(item.settings);
+    render();
+  }
+}
+
+async function exportBatch() {
+  const batch = state.batch;
+  const active = activeBatchItem();
+  if (active && state.kinomap) active.settings = currentSettings();
+  const selected = batch.items.filter((item) => item.selected);
+  const counts = { saved: 0, downloaded: 0, failed: 0 };
+  batch.busy = true;
+  for (const item of selected) {
+    item.status = "saving";
+    renderBatch();
+    try {
+      const workout = buildBatchWorkout(item, item.settings);
+      const { saved } = await saveFit(workout.fitBytes, fitFileName(workout.activityName, t("fallbackActivity")), item.directoryHandle);
+      counts[saved ? "saved" : "downloaded"] += 1;
+      Object.assign(item, { status: null, failure: null, exported: true, selected: false });
+    } catch (error) {
+      counts.failed += 1;
+      Object.assign(item, { status: "failed", failure: translateMessage(error.message) });
+    }
+  }
+  batch.busy = false;
+  renderBatch();
+  setNotice(t("batchDone", counts), counts.failed ? "error" : "success");
 }
 
 function dateInputValue(epochMs) {
@@ -122,8 +215,12 @@ function parseCurrentKinomap(manual = false) {
   }
 }
 
-async function loadKinomap(file, sourceDirectoryHandle = null) {
+async function loadKinomap(file, sourceDirectoryHandle = null, { keepBatch = false } = {}) {
   if (!file) return;
+  if (!keepBatch && state.batch) {
+    state.batch = null;
+    renderBatch();
+  }
   state.error = null;
   state.outputDirectoryHandle = sourceDirectoryHandle;
   try {
@@ -252,17 +349,21 @@ function render() {
 }
 
 async function loadFolder(files) {
-  const chosen = folderCandidates(await withoutExportedFits(files));
-  if (!chosen.kinomap) {
+  const items = await planBatch(files, { timeZone: zone, fallbackTitle: t("fallbackActivity") });
+  const first = items.find((item) => !item.error);
+  if (!first) {
     setNotice(t("noFolderKinomap"), "error");
     return;
   }
-  await loadKinomap(chosen.kinomap, chosen.kinomap.sourceDirectoryHandle ?? null);
-  if (chosen.fit) await loadFit(chosen.fit);
-  if (chosen.fit && chosen.kinomap) {
-    state.mode = "merge";
-    updateModeButtons();
-    offsetEstimate();
+  // A single activity opens straight in the editor; several become preview tabs, opening the newest one.
+  state.batch = items.length > 1 ? { items, activeId: null, busy: false } : null;
+  if (state.batch) {
+    await selectBatchItem(first);
+  } else {
+    state.fit = null;
+    state.fitFile = null;
+    await loadKinomap(first.kinomapFile, first.directoryHandle);
+    if (first.fitFile) await loadFit(first.fitFile);
   }
 }
 
@@ -283,7 +384,13 @@ byId("kinomapButton").addEventListener("click", () => elements.kinomapInput.clic
 byId("fitButton").addEventListener("click", () => elements.fitInput.click());
 byId("folderButton").addEventListener("click", chooseFolder);
 elements.kinomapInput.addEventListener("change", (event) => loadKinomap(event.target.files[0]));
-elements.fitInput.addEventListener("change", (event) => loadFit(event.target.files[0]));
+elements.fitInput.addEventListener("change", async (event) => {
+  await loadFit(event.target.files[0]);
+  // A watch FIT picked by hand replaces the paired one of the open folder activity.
+  const active = activeBatchItem();
+  if (active && state.fit) Object.assign(active, { fitFile: state.fitFile, fit: state.fit });
+  renderBatch();
+});
 elements.folderInput.addEventListener("change", (event) => loadFolder(event.target.files));
 elements.manualStart.addEventListener("input", () => {
   parseCurrentKinomap(true);
@@ -305,6 +412,7 @@ elements.lapPreset.addEventListener("change", () => {
 elements.activityName.addEventListener("input", render);
 byId("autoOffsetButton").addEventListener("click", offsetEstimate);
 elements.export.addEventListener("click", exportFit);
+byId("batchExportButton").addEventListener("click", exportBatch);
 elements.lightThemeButton.addEventListener("click", () => setTheme("light"));
 elements.darkThemeButton.addEventListener("click", () => setTheme("dark"));
 elements.languageButton.addEventListener("click", () => setLanguageMenu(elements.languageMenu.hidden));

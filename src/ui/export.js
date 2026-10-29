@@ -1,3 +1,4 @@
+import { fitFileName } from "../files.js";
 import { elements, setNotice, state, t } from "./context.js";
 
 function downloadFit(blob, filename) {
@@ -13,38 +14,39 @@ function downloadFit(blob, filename) {
   }, 1000);
 }
 
-export async function exportFit() {
-  if (!state.result) return;
-  const safeName = (elements.activityName.value || state.result.activityName || t("fallbackActivity"))
-    .trim()
-    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-")
-    .replace(/[. ]+$/g, "") || t("fallbackActivity");
-  const filename = `${safeName}.fit`;
-  const blob = new Blob([state.result.fitBytes], { type: "application/octet-stream" });
-  let saveFallbackMessage = "";
-  if (state.outputDirectoryHandle) {
-    setNotice(t("savingBesideFiles"));
+// Writes the FIT next to the source files when a writable folder handle is available, otherwise downloads it.
+export async function saveFit(fitBytes, filename, directoryHandle) {
+  const blob = new Blob([fitBytes], { type: "application/octet-stream" });
+  let fallbackMessage = "";
+  if (directoryHandle) {
     try {
-      let permission = await state.outputDirectoryHandle.queryPermission?.({ mode: "readwrite" });
-      if (permission !== "granted") permission = await state.outputDirectoryHandle.requestPermission({ mode: "readwrite" });
+      let permission = await directoryHandle.queryPermission?.({ mode: "readwrite" });
+      if (permission !== "granted") permission = await directoryHandle.requestPermission({ mode: "readwrite" });
       if (permission === "granted") {
-        const fileHandle = await state.outputDirectoryHandle.getFileHandle(filename, { create: true });
+        const fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
         const writable = await fileHandle.createWritable();
         await writable.write(blob);
         await writable.close();
-        setNotice(t("savedBesideFiles"), "success");
-        return;
+        return { saved: true, fallbackMessage };
       }
-      saveFallbackMessage = t("savePermissionDenied");
+      fallbackMessage = t("savePermissionDenied");
     } catch (error) {
-      saveFallbackMessage = error.message;
+      fallbackMessage = error.message;
     }
   }
+  downloadFit(blob, filename);
+  return { saved: false, fallbackMessage };
+}
+
+export async function exportFit() {
+  if (!state.result) return;
+  const filename = fitFileName(elements.activityName.value || state.result.activityName, t("fallbackActivity"));
+  if (state.outputDirectoryHandle) setNotice(t("savingBesideFiles"));
   try {
-    downloadFit(blob, filename);
-    setNotice(saveFallbackMessage
-      ? t("saveFallbackStarted", { message: saveFallbackMessage })
-      : t("downloadStarted", { filename }), saveFallbackMessage ? "" : "success");
+    const { saved, fallbackMessage } = await saveFit(state.result.fitBytes, filename, state.outputDirectoryHandle);
+    if (saved) setNotice(t("savedBesideFiles"), "success");
+    else if (fallbackMessage) setNotice(t("saveFallbackStarted", { message: fallbackMessage }));
+    else setNotice(t("downloadStarted", { filename }), "success");
   } catch (error) {
     setNotice(t("exportFailed", { message: error.message }), "error");
   }

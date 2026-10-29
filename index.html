@@ -166,6 +166,15 @@
         </section>
 
         <section class="preview" aria-label="Náhled a export" data-i18n-aria="preview">
+          <div class="card batch-card" id="batchPanel" hidden>
+            <div class="batch-header">
+              <h2 data-i18n="batchHeading">Aktivity ve složce</h2>
+              <span class="estimate-note" id="batchNote"></span>
+              <button class="export-button batch-export" id="batchExportButton" type="button" disabled><span>Exportovat vybrané</span><span aria-hidden="true">↓</span></button>
+            </div>
+            <div class="batch-tabs" id="batchTabs" role="tablist" aria-label="Aktivity ve složce" data-i18n-aria="batchHeading"></div>
+          </div>
+
           <div class="card">
             <div class="section-heading">
               <span class="section-index">3</span>

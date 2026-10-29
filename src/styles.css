@@ -202,6 +202,28 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
 #comparisonChart { display: block; width: 100%; height: 300px; }
 .chart-axis { display: flex; justify-content: space-between; margin-top: 6px; color: var(--subtle); font-size: 11px; }
 
+/* Batch tabs */
+/* Grid items default to min-width: auto, so the scrolling tab strip would otherwise widen the whole preview column. */
+.preview > .card { min-width: 0; }
+.batch-card { padding-bottom: 16px; }
+.batch-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.batch-header .estimate-note { margin-right: auto; }
+.batch-export { min-height: 38px; padding: 0 16px; font-size: 13px; box-shadow: none; }
+.batch-tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; }
+.batch-tab { position: relative; flex: 0 0 196px; scroll-snap-align: start; }
+.batch-tab input { position: absolute; top: 10px; right: 10px; z-index: 1; width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.batch-tab-button { width: 100%; height: 100%; display: grid; gap: 3px; padding: 10px 34px 10px 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-2); text-align: left; transition: border-color .15s, background .15s; }
+.batch-tab-button:hover:not(:disabled) { border-color: var(--line-strong); }
+.batch-tab-button:disabled { cursor: not-allowed; opacity: .6; }
+.batch-tab.is-active .batch-tab-button { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+.batch-tab-meta { overflow: hidden; color: var(--muted); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.batch-tab-title { overflow: hidden; font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.batch-tab-status { color: var(--subtle); font-size: 11px; font-weight: 600; }
+.batch-tab-status.is-done { color: var(--success); }
+.batch-tab-status.is-error { color: var(--danger-ink); }
+.batch-tab-status.is-warning { color: var(--warning); }
+.batch-tab-status.is-busy { color: var(--accent); }
+
 /* Summary */
 .summary-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
 .summary-cell { grid-column: span 2; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 12px; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line) inset; }

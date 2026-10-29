@@ -26,6 +26,8 @@ export const state = {
   result: null,
   estimate: null,
   error: null,
+  // Activities found in a chosen folder, shown as preview tabs: { items, activeId, busy }.
+  batch: null,
 };
 
 export const zone = "Europe/Prague";
