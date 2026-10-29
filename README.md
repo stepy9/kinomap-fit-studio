@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Open the localhost URL printed by Vite. Choose TCX/PWX and, for a merge, the matching watch FIT. Selecting a folder chooses the newest date with both source types when available. Positive offset values move Kinomap timestamps later; automatic estimation compares the heart-rate streams and falls back to start times when the signal is weak.
+Open the localhost URL printed by Vite. Choose TCX/PWX and, for a merge, the matching watch FIT. Selecting a folder chooses the newest date with both source types when available. In Chromium browsers, folder selection uses the File System Access API so the exported FIT can be written next to the source TCX; individual-file selection and unsupported browsers use a normal download. Positive offset values move Kinomap timestamps later; automatic estimation compares the heart-rate streams and falls back to start times when the signal is weak.
 
 The output uses the watch timestamps when merging, rebases distance to zero after trimming, and writes the Europe/Prague local timestamp without GPS or elevation. TCX without a timezone is interpreted in Europe/Prague. A suspicious TCX date prompts for a manual local start time. The Kinomap title is stored in FIT `session.sportProfileName`, but Garmin Connect may ignore it and generate its own activity title. The Connect event category and activity notes/URL are not represented by the FIT activity profile; edit these fields in Connect after import when needed. The supplied TCX/PWX samples contain no activity URL.
 

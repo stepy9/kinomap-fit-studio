@@ -129,7 +129,8 @@ h2 { margin: 0; font-size: 16px; line-height: 1.3; font-weight: 700; letter-spac
 .chart-axis { display: flex; justify-content: space-between; color: #8a968e; font: 8px var(--mono); }
 .notice { padding: 9px 11px; margin-top: 10px; border-left: 3px solid #d96f3c; color: #805638; background: #fff6eb; font-size: 10px; line-height: 1.5; }
 .notice.is-error { border-color: #bb4739; color: #8f392d; background: #fff0ed; }
-.notice.is-success { border-color: #3b956e; color: #286748; background: #eff8f1; }
+.notice.is-success { display: flex; align-items: center; gap: 8px; padding: 11px 12px; border-left-width: 4px; border-color: #187447; color: #104c2b; background: #dff3e5; font-size: 11px; font-weight: 700; }
+.notice.is-success::before { content: "✓"; display: grid; place-items: center; width: 18px; height: 18px; flex: 0 0 auto; border-radius: 50%; color: #fff; background: #187447; font-size: 12px; }
 .summary-header { margin: 22px 0 11px; }
 .summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid #cbd5cb; border-left: 1px solid #cbd5cb; }
 .summary-cell { min-height: 64px; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 9px 11px; border-right: 1px solid #cbd5cb; border-bottom: 1px solid #cbd5cb; background: rgba(251, 252, 248, .55); }
@@ -253,7 +254,8 @@ h2 { margin: 0; font-size: 16px; line-height: 1.3; font-weight: 700; letter-spac
 :root[data-theme="dark"] .chart-legend { color: #adbbb1; }
 :root[data-theme="dark"] .notice { border-color: #c87545; color: #edc098; background: #33271f; }
 :root[data-theme="dark"] .notice.is-error { border-color: #d1665a; color: #f1aaa1; background: #351f1d; }
-:root[data-theme="dark"] .notice.is-success { border-color: #55a77b; color: #a5dabb; background: #1d3025; }
+:root[data-theme="dark"] .notice.is-success { border-color: #65d394; color: #edfff2; background: #214b32; }
+:root[data-theme="dark"] .notice.is-success::before { color: #102719; background: #80e2a5; }
 :root[data-theme="dark"] .summary-grid { border-color: #3a4a40; }
 :root[data-theme="dark"] .summary-cell { border-color: #3a4a40; background: rgba(25, 37, 30, .8); }
 :root[data-theme="dark"] .summary-cell strong { color: #c2e0cb; }

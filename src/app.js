@@ -17,6 +17,7 @@ const elements = {
 const state = {
   kinomapFile: null,
   kinomapText: null,
+  outputDirectoryHandle: null,
   kinomap: null,
   fitFile: null,
   fit: null,
@@ -209,9 +210,10 @@ function parseCurrentKinomap(manual = false) {
   }
 }
 
-async function loadKinomap(file) {
+async function loadKinomap(file, sourceDirectoryHandle = null) {
   if (!file) return;
   state.error = null;
+  state.outputDirectoryHandle = sourceDirectoryHandle;
   try {
     state.kinomapFile = file;
     elements.activityName.value = nameFromKinomapFile(file);
@@ -465,7 +467,7 @@ async function loadFolder(files) {
     setNotice(t("noFolderKinomap"), "error");
     return;
   }
-  await loadKinomap(chosen.kinomap);
+  await loadKinomap(chosen.kinomap, chosen.kinomap.sourceDirectoryHandle ?? null);
   if (chosen.fit) await loadFit(chosen.fit);
   if (chosen.fit && chosen.kinomap) {
     state.mode = "merge";
@@ -474,15 +476,44 @@ async function loadFolder(files) {
   }
 }
 
-function exportFit() {
-  if (!state.result) return;
-  const safeName = (state.kinomapFile?.name ?? "rowing-activity")
-    .replace(/\.(tcx|pwx)$/i, "")
-    .replace(/[<>:"/\\|?*]+/g, "-");
-  const url = URL.createObjectURL(new Blob([state.result.fitBytes], { type: "application/octet-stream" }));
+async function collectDirectoryFiles(directoryHandle, relativePath = "", files = []) {
+  for await (const [name, entry] of directoryHandle.entries()) {
+    const entryPath = relativePath ? `${relativePath}/${name}` : name;
+    if (entry.kind === "directory") {
+      await collectDirectoryFiles(entry, entryPath, files);
+    } else if (/\.(tcx|pwx|fit)$/i.test(name)) {
+      const file = await entry.getFile();
+      files.push({
+        name: file.name,
+        lastModified: file.lastModified,
+        webkitRelativePath: entryPath,
+        sourceDirectoryHandle: directoryHandle,
+        text: () => file.text(),
+        arrayBuffer: () => file.arrayBuffer(),
+      });
+    }
+  }
+  return files;
+}
+
+async function chooseFolder() {
+  if (typeof window.showDirectoryPicker !== "function") {
+    elements.folderInput.click();
+    return;
+  }
+  try {
+    const directoryHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+    await loadFolder(await collectDirectoryFiles(directoryHandle));
+  } catch (error) {
+    if (error.name !== "AbortError") setNotice(error.message, "error");
+  }
+}
+
+function downloadFit(blob, filename) {
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${safeName}.fit`;
+  link.download = filename;
   document.body.append(link);
   link.click();
   window.setTimeout(() => {
@@ -491,9 +522,46 @@ function exportFit() {
   }, 1000);
 }
 
+async function exportFit() {
+  if (!state.result) return;
+  const safeName = (elements.activityName.value || state.result.activityName || t("fallbackActivity"))
+    .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-")
+    .replace(/[. ]+$/g, "") || t("fallbackActivity");
+  const filename = `${safeName}.fit`;
+  const blob = new Blob([state.result.fitBytes], { type: "application/octet-stream" });
+  let saveFallbackMessage = "";
+  if (state.outputDirectoryHandle) {
+    setNotice(t("savingBesideFiles"));
+    try {
+      let permission = await state.outputDirectoryHandle.queryPermission?.({ mode: "readwrite" });
+      if (permission !== "granted") permission = await state.outputDirectoryHandle.requestPermission({ mode: "readwrite" });
+      if (permission === "granted") {
+        const fileHandle = await state.outputDirectoryHandle.getFileHandle(filename, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        setNotice(t("savedBesideFiles"), "success");
+        return;
+      }
+      saveFallbackMessage = t("savePermissionDenied");
+    } catch (error) {
+      saveFallbackMessage = error.message;
+    }
+  }
+  try {
+    downloadFit(blob, filename);
+    setNotice(saveFallbackMessage
+      ? t("saveFallbackStarted", { message: saveFallbackMessage })
+      : t("downloadStarted", { filename }), saveFallbackMessage ? "" : "success");
+  } catch (error) {
+    setNotice(t("exportFailed", { message: error.message }), "error");
+  }
+}
+
 byId("kinomapButton").addEventListener("click", () => elements.kinomapInput.click());
 byId("fitButton").addEventListener("click", () => elements.fitInput.click());
-byId("folderButton").addEventListener("click", () => elements.folderInput.click());
+byId("folderButton").addEventListener("click", chooseFolder);
 elements.kinomapInput.addEventListener("change", (event) => loadKinomap(event.target.files[0]));
 elements.fitInput.addEventListener("change", (event) => loadFit(event.target.files[0]));
 elements.folderInput.addEventListener("change", (event) => loadFolder(event.target.files));
