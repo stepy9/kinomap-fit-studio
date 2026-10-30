@@ -1,4 +1,4 @@
-import { detectIntervals, parseKinomapPlan } from "../core.js";
+import { detectIntervals, kinomapPlanText, parseKinomapPlan } from "../core.js";
 import { byId, displayNumber, formatDuration, t } from "./context.js";
 
 // Interval types offered for segments and laps, in workout order.
@@ -182,11 +182,11 @@ export function openIntervalsDialog(workout, segments, onSave) {
     draft = detected.length ? detected : [{ startMs, intensity: "active" }];
     renderRows();
   };
-  // A plan copied from Kinomap arrives one value per line; it is shown as one step per line.
+  // A plan copied from Kinomap arrives one value per line, or as the JSON its API returns; it is shown as one step per line.
   byId("planText").onpaste = () => setTimeout(() => {
     const text = byId("planText");
     const lines = [];
-    for (const token of text.value.split(/\s+/).filter(Boolean)) {
+    for (const token of kinomapPlanText(text.value).split(/\s+/).filter(Boolean)) {
       if (/^(?:\d+:)?\d{1,2}:\d{2}$/.test(token)) lines.push([token]);
       else lines.at(-1)?.push(token);
     }

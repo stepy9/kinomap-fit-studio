@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { Decoder, Stream } from "@garmin/fitsdk";
-import { buildWorkout, decodeGarminFit, detectIntervals, estimateOffset, parseKinomap, parseKinomapPlan } from "../src/core.js";
+import { buildWorkout, decodeGarminFit, detectIntervals, estimateOffset, kinomapPlanText, parseKinomap, parseKinomapPlan } from "../src/core.js";
 import { translations } from "../src/i18n.js";
 import { exportSerialNumber } from "../src/fit.js";
 
@@ -514,4 +514,13 @@ test("can write cadence targets as the watts they took", () => {
   assert.deepEqual(steps.map((step) => step.targetType), ["power", "power"]);
   assert.deepEqual(steps.map((step) => step.customTargetPowerLow), [105, 195]);
   assert.equal(roundTrip(buildWorkout(kinomap, null, options).fitBytes).workoutStepMesgs[0].targetType, "cadence");
+});
+
+test("reads a workout plan as Kinomap's API returns it", () => {
+  const json = JSON.stringify({ data: [{ time: 6, value: 22, percent: 75, type: "A" }, { time: 126, value: 26, percent: 85, type: "A" }, { time: 609, value: 0, percent: 0, type: "CD" }], unlocked_content: [] });
+  assert.equal(kinomapPlanText(json), "00:06  75%  22rpm  A\n02:06  85%  26rpm  A\n10:09  0%  0rpm  CD");
+  const segments = parseKinomapPlan(json, 1000);
+  assert.deepEqual(segments.map((segment) => segment.startMs), [7000, 127000, 610000]);
+  assert.deepEqual(segments.map((segment) => segment.target), [22, 26, undefined]);
+  assert.deepEqual(segments.map((segment) => segment.intensity), ["active", "active", "cooldown"]);
 });

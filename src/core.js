@@ -409,9 +409,27 @@ export function detectIntervals(records) {
 // the highest target is the work; a lower first step is the warm-up and a closing step without one the cool-down.
 const planCodes = { A: "active", WU: "warmup", RY: "recovery", R: "rest", CD: "cooldown" };
 
+// The plan as Kinomap's API returns it ({ data: [{ time, value, percent, type }] }, time in seconds, value in rpm)
+// written out as the plan table, one step per line; other text comes back unchanged.
+export function kinomapPlanText(text) {
+  let steps;
+  try {
+    const parsed = JSON.parse(text);
+    steps = Array.isArray(parsed) ? parsed : parsed?.data;
+  } catch {
+    return text;
+  }
+  if (!Array.isArray(steps)) return text;
+  const clock = (seconds) => `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  return steps
+    .filter((step) => Number.isFinite(step?.time))
+    .map((step) => [clock(Math.round(step.time)), `${step.percent ?? 0}%`, `${step.value ?? 0}rpm`, step.type ?? ""].join("  ").trim())
+    .join("\n");
+}
+
 export function parseKinomapPlan(text, startMs = 0) {
   const steps = [];
-  for (const token of String(text).split(/\s+/).filter(Boolean)) {
+  for (const token of kinomapPlanText(String(text)).split(/\s+/).filter(Boolean)) {
     const time = token.match(/^(?:(\d+):)?(\d{1,2}):(\d{2})$/);
     if (time) {
       const [hours, minutes, seconds] = time.slice(1).map((part) => Number(part ?? 0));
