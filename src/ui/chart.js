@@ -158,6 +158,7 @@ export function drawChart() {
     const maximum = lane.grow && sourceValues.length
       ? Math.max(lane.max, Math.max(...sourceValues) * 1.08)
       : lane.max;
+    Object.assign(lane, { top: laneTop, bottom: laneBottom, maximum });
 
     context.strokeStyle = gridColor;
     context.lineWidth = 1;
@@ -218,7 +219,53 @@ export function drawChart() {
       shade: color("--chart-trim"), handle: color("--accent"), grip: color("--surface"),
     });
   }
+  drawSegments(context);
   drawHover(context, labelColor);
+}
+
+// Interval laps: a band along the top coloured by segment type and a dashed line where each segment starts.
+const segmentColors = { warmup: "#f2c230", active: "--accent", recovery: "#43b649", rest: "#9aa4b2", cooldown: "#1e88e5" };
+
+function drawSegments(context) {
+  const segments = state.result?.segments;
+  if (!layout || !segments?.length) return;
+  const theme = getComputedStyle(document.documentElement);
+  const xFor = (ms) => layout.left + ((Math.min(layout.endMs, Math.max(layout.startMs, ms)) - layout.startMs) / layout.span) * layout.plotWidth;
+  const endMs = state.result.endMs;
+  context.save();
+  segments.forEach((segment, index) => {
+    const color = segmentColors[segment.intensity]?.startsWith("--") ? theme.getPropertyValue(segmentColors[segment.intensity]).trim() : segmentColors[segment.intensity] ?? "#9aa4b2";
+    const fromX = xFor(segment.startMs);
+    const toX = xFor(segments[index + 1]?.startMs ?? endMs);
+    context.fillStyle = color;
+    context.fillRect(fromX, layout.top - 6, Math.max(1, toX - fromX - 1), 4);
+    // A cadence or power target shows as a level line across its segment in the matching lane.
+    const lane = segment.target > 0 && layout.lanes.find((candidate) => candidate.key === segment.targetType);
+    if (lane) {
+      const share = Math.min(1, Math.max(0, (lane.laneValue(segment.target) - lane.min) / (lane.maximum - lane.min)));
+      const y = lane.bottom - share * (lane.bottom - lane.top);
+      context.strokeStyle = color;
+      context.lineWidth = 1.5;
+      context.setLineDash([6, 3]);
+      context.beginPath();
+      context.moveTo(fromX, y);
+      context.lineTo(toX, y);
+      context.stroke();
+      context.setLineDash([]);
+      context.lineWidth = 1;
+    }
+    if (index === 0) return;
+    context.strokeStyle = color;
+    context.globalAlpha = 0.6;
+    context.setLineDash([4, 4]);
+    context.beginPath();
+    context.moveTo(fromX, layout.top);
+    context.lineTo(fromX, layout.plotBottom);
+    context.stroke();
+    context.globalAlpha = 1;
+    context.setLineDash([]);
+  });
+  context.restore();
 }
 
 // The record nearest to a moment, if one lies within a few seconds of it.
@@ -261,7 +308,12 @@ function drawHover(context, lineColor) {
   };
   const showWatch = layout.sources.fit.length && !hiddenSeries.has("watch");
   const showKinomap = !hiddenSeries.has("kinomap");
-  tip.innerHTML = `<div class="tip-time">${clockTime(hoverMs)}</div>${layout.lanes.map((lane) => `<div class="tip-row"><span>${lane.title.toLowerCase()}</span>${showWatch ? cell(watch, lane, "watch") : ""}${showKinomap ? cell(kinomap, lane, "kinomap") : ""}<span class="tip-unit">${lane.unit}</span></div>`).join("")}`;
+  // The interval under the cursor adds its target below the lane it applies to.
+  const segment = state.result?.segments?.findLast((candidate) => candidate.startMs <= hoverMs);
+  const targetRow = (lane) => (segment?.target > 0 && segment.targetType === lane.key
+    ? `<div class="tip-row is-target"><span>${t("segmentTarget").toLowerCase()}</span>${showWatch && showKinomap ? `<span class="tip-value"></span>` : ""}<span class="tip-value">${lane.format(lane.laneValue(segment.target))}</span><span class="tip-unit">${lane.unit}</span></div>`
+    : "");
+  tip.innerHTML = `<div class="tip-time">${clockTime(hoverMs)}</div>${layout.lanes.map((lane) => `<div class="tip-row"><span>${lane.title.toLowerCase()}</span>${showWatch ? cell(watch, lane, "watch") : ""}${showKinomap ? cell(kinomap, lane, "kinomap") : ""}<span class="tip-unit">${lane.unit}</span></div>${targetRow(lane)}`).join("")}`;
   tip.hidden = false;
   const width = tip.offsetWidth;
   const toLeft = x + 12 + width > layout.left + layout.plotWidth;

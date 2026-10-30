@@ -354,6 +354,129 @@ function lapsFor(records, lapDistance, calories, timerSeconds, sport) {
   });
 }
 
+// Interval laps: each segment of the workout becomes its own lap with its intensity, as a watch workout records them.
+const intervalMinimumSeconds = 20;
+
+// The signal that carries the intervals: power when recorded, otherwise cadence, then speed.
+function intervalSignal(records) {
+  return ["power", "cadence", "speed"].find((field) => values(records, field).filter((value) => value > 0).length > records.length / 2) ?? null;
+}
+
+function rollingMedian(numbers, radius) {
+  return numbers.map((_, index) => {
+    const window = numbers.slice(Math.max(0, index - radius), index + radius + 1).filter(Number.isFinite).sort((a, b) => a - b);
+    return window.length ? window[window.length >> 1] : null;
+  });
+}
+
+// Splits a workout into harder and easier stretches by the level of power or cadence; short wobbles join their neighbours.
+export function detectIntervals(records) {
+  const field = intervalSignal(records);
+  if (!field || records.length < 2) return { field, segments: [] };
+  const smoothed = rollingMedian(records.map((record) => record[field] ?? null), 7);
+  const sorted = smoothed.filter(Number.isFinite).sort((a, b) => a - b);
+  const low = sorted[Math.floor(sorted.length * 0.2)];
+  const high = sorted[Math.floor(sorted.length * 0.8)];
+  const middle = sorted[sorted.length >> 1];
+  // A steady workout has no intervals worth splitting.
+  if (high - low < Math.max(3, middle * 0.1)) return { field, segments: [] };
+  const threshold = (low + high) / 2;
+  let runs = [];
+  smoothed.forEach((value, index) => {
+    const hard = Number.isFinite(value) ? value >= threshold : runs.at(-1)?.hard ?? false;
+    if (runs.at(-1)?.hard !== hard) runs.push({ startMs: records[index].timeMs, hard });
+  });
+  const endMs = records.at(-1).timeMs;
+  const duration = (index) => ((runs[index + 1]?.startMs ?? endMs) - runs[index].startMs) / 1000;
+  for (;;) {
+    let shortest = -1;
+    runs.forEach((_, index) => {
+      if (duration(index) < intervalMinimumSeconds && (shortest < 0 || duration(index) < duration(shortest))) shortest = index;
+    });
+    if (shortest < 0 || runs.length < 2) break;
+    runs[shortest].hard = !runs[shortest].hard;
+    runs = runs.filter((run, index) => index === 0 || run.hard !== runs[index - 1].hard);
+  }
+  if (runs.length < 2) return { field, segments: [] };
+  const segments = runs.map((run) => ({ startMs: run.startMs, intensity: run.hard ? "active" : "recovery" }));
+  if (!runs[0].hard) segments[0].intensity = "warmup";
+  if (!runs.at(-1).hard) segments.at(-1).intensity = "cooldown";
+  return { field, segments };
+}
+
+// Reads a workout plan copied from Kinomap ("01:09  80%  24rpm  A" per step) into segments measured from startMs.
+// A step's type code (A, RY, CD, WU) sets its type; steps without one fall back to the targets:
+// the highest target is the work; a lower first step is the warm-up and a closing step without one the cool-down.
+const planCodes = { A: "active", WU: "warmup", RY: "recovery", R: "rest", CD: "cooldown" };
+
+export function parseKinomapPlan(text, startMs = 0) {
+  const steps = [];
+  for (const token of String(text).split(/\s+/).filter(Boolean)) {
+    const time = token.match(/^(?:(\d+):)?(\d{1,2}):(\d{2})$/);
+    if (time) {
+      const [hours, minutes, seconds] = time.slice(1).map((part) => Number(part ?? 0));
+      steps.push({ startMs: startMs + ((hours * 60 + minutes) * 60 + seconds) * 1000 });
+      continue;
+    }
+    const step = steps.at(-1);
+    const cadence = token.match(/^(\d+)(rpm|spm)$/i);
+    const power = token.match(/^(\d+)w$/i);
+    if (step && cadence && step.target == null) Object.assign(step, { targetType: "cadence", target: Number(cadence[1]) });
+    else if (step && power && step.target == null) Object.assign(step, { targetType: "power", target: Number(power[1]) });
+    else if (step && planCodes[token.toUpperCase()]) step.code = planCodes[token.toUpperCase()];
+  }
+  const segments = steps
+    .sort((a, b) => a.startMs - b.startMs)
+    .filter((step, index, list) => index === 0 || step.startMs > list[index - 1].startMs);
+  const highest = Math.max(0, ...segments.map((segment) => segment.target ?? 0));
+  for (const [index, segment] of segments.entries()) {
+    if (!(segment.target > 0)) {
+      delete segment.target;
+      delete segment.targetType;
+    }
+    const hard = highest > 0 && segment.target === highest;
+    segment.intensity = segment.code ?? (hard ? "active" : index === 0 ? "warmup" : index === segments.length - 1 && segment.target == null ? "cooldown" : "recovery");
+    delete segment.code;
+  }
+  return segments;
+}
+
+// Laps split exactly at each segment start, carrying the segment's intensity.
+function lapsForSegments(records, segments, calories, timerSeconds, sport) {
+  const firstMs = records[0].timeMs;
+  const lastMs = records.at(-1).timeMs;
+  const inside = [...segments].sort((a, b) => a.startMs - b.startMs).filter((segment) => segment.startMs > firstMs && segment.startMs < lastMs);
+  const groups = [[records[0]]];
+  let next = 0;
+  for (let index = 1; index < records.length; index += 1) {
+    const record = records[index];
+    while (next < inside.length && record.timeMs >= inside[next].startMs) {
+      const timeMs = inside[next].startMs;
+      const point = { timeMs };
+      for (const field of ["distance", "heartRate", "cadence", "power", "speed", "altitude"]) point[field] = interpolate(records, timeMs, field);
+      point.distance ??= record.distance;
+      groups.at(-1).push(point);
+      groups.push([point]);
+      next += 1;
+    }
+    groups.at(-1).push(record);
+  }
+  const sorted = [...segments].sort((a, b) => a.startMs - b.startMs);
+  const stepAt = (timeMs) => Math.max(0, sorted.findLastIndex((segment) => segment.startMs <= timeMs));
+  return groups.filter((group) => group.length > 1).map((group) => {
+    const seconds = (group.at(-1).timeMs - group[0].timeMs) / 1000;
+    const stepIndex = stepAt(group[0].timeMs);
+    return {
+      ...summaryFor(group, seconds, calories * movingSeconds(group) / Math.max(1, timerSeconds), sport),
+      intensity: sorted[stepIndex]?.intensity ?? "active",
+      targetType: sorted[stepIndex]?.targetType,
+      target: sorted[stepIndex]?.target,
+      stepIndex,
+      trigger: "time",
+    };
+  });
+}
+
 // How the workout felt, as the watch asks after a recording: feel 0–100 in steps of 25, perceived effort 1–10.
 export const defaultFeel = { workoutFeel: 50, workoutRpe: 5 };
 const feelValue = (value, fallback) => (value === undefined ? fallback : value === null || value === "" ? null : Number(value));
@@ -422,16 +545,29 @@ export function buildWorkout(kinomap, fit = null, options = {}) {
     workoutFeel: feelValue(options.workoutFeel, defaultFeel.workoutFeel),
     workoutRpe: feelValue(options.workoutRpe, defaultFeel.workoutRpe),
   };
-  const lapDistance = options.lapDistanceMeters == null || options.lapDistanceMeters === ""
+  // "intervals" splits the laps by workout segments, given or estimated from the data; otherwise laps go by distance.
+  const byIntervals = options.lapDistanceMeters === "intervals";
+  const lapDistance = byIntervals ? null : options.lapDistanceMeters == null || options.lapDistanceMeters === ""
     ? defaultLapDistance(kinomap.sport)
     : Math.max(0, Number(options.lapDistanceMeters) || 0);
+  const detected = byIntervals && !options.segments?.length ? detectIntervals(records) : null;
+  const segments = byIntervals ? (options.segments?.length ? options.segments : detected.segments) : null;
   // Each lap can be marked as warm-up, rest or cool-down; unmarked laps stay active.
-  const laps = lapsFor(records, lapDistance, calories, timerSeconds, kinomap.sport)
-    .map((lap, index) => ({ ...lap, intensity: options.lapIntensities?.[index] || "active" }));
+  const laps = byIntervals
+    ? lapsForSegments(records, segments.length ? segments : [{ startMs: records[0].timeMs, intensity: "active" }], calories, timerSeconds, kinomap.sport)
+    : lapsFor(records, lapDistance, calories, timerSeconds, kinomap.sport)
+      .map((lap, index) => ({ ...lap, intensity: options.lapIntensities?.[index] || "active" }));
   const activityName = String(options.activityName ?? "Kinomap - Rowing Workout").trim();
-  const fitBytes = encodeFit(records, summary, laps, startMs, endMs, timeZone, activityName, kinomap.sport, kinomap.subSport);
+  // Interval laps also carry the workout steps they follow, with any targets set for them.
+  const steps = byIntervals && segments.length
+    ? [...segments].sort((a, b) => a.startMs - b.startMs).map((segment, index, list) => ({
+      ...segment, durationSeconds: Math.max(1, ((list[index + 1]?.startMs ?? endMs) - Math.max(startMs, segment.startMs)) / 1000),
+    }))
+    : null;
+  const fitBytes = encodeFit(records, summary, laps, startMs, endMs, timeZone, activityName, kinomap.sport, kinomap.subSport, steps, options.asWatch ?? true);
   return {
     mode: fit ? "merge" : "convert", records, startMs, endMs, summary, laps, lapDistance, activityName,
+    segments, intervalSignal: byIntervals ? detected?.field ?? intervalSignal(records) : null,
     sourceWindow: { startMs: startMs - sourceShiftMs, endMs: endMs - sourceShiftMs },
     sport: kinomap.sport, subSport: kinomap.subSport, sportLabel: kinomap.sportLabel,
     fitBytes, warnings: [...(kinomap.warnings ?? [])],

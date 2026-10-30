@@ -275,7 +275,33 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
 .tip-value { min-width: 34px; color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
 .tip-value.is-watch { color: var(--series-watch); }
 .tip-value.is-kinomap { color: var(--series-source); }
+.tip-row.is-target { padding-left: 10px; font-size: 11px; }
+.tip-row.is-target .tip-value { color: var(--muted); }
 .tip-unit { min-width: 54px; color: var(--subtle); font-size: 11px; }
+.edit-intervals { align-self: end; height: 40px; margin-top: 0; }
+.edit-intervals[hidden] { display: none; }
+.intervals-dialog { width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 22px; border: 0; border-radius: 16px; color: var(--ink); background: var(--surface); box-shadow: 0 0 0 1px var(--line-strong), 0 24px 60px rgba(0, 0, 0, .35); }
+.intervals-dialog::backdrop { background: rgba(6, 10, 18, .55); }
+.intervals-dialog .laps-scroll { max-height: min(420px, 55vh); }
+.dialog-head { display: flex; align-items: baseline; gap: 12px; }
+.dialog-head h2 { margin: 0; font-size: 18px; }
+.intervals-table input { width: 72px; height: 28px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 7px; color: var(--ink); background: var(--surface); font: inherit; text-align: right; }
+.intervals-table input:disabled { border-color: transparent; background: transparent; color: var(--muted); }
+.target-cell { display: flex; justify-content: flex-end; gap: 6px; }
+.intervals-table .target-cell input { width: 58px; }
+.intervals-table .target-cell select { min-width: 92px; }
+.intervals-table input.is-invalid { border-color: #e5484d; }
+.intervals-table .link-button { font-size: 18px; line-height: 1; }
+.intervals-table .link-button:disabled { opacity: .3; cursor: default; }
+.dialog-actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+.dialog-actions .outline-button { margin-top: 0; }
+.dialog-actions .export-button { min-height: 38px; padding: 0 18px; font-size: 14px; box-shadow: none; }
+.dialog-spacer { flex: 1; }
+.check-field { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.plan-paste { margin: 0 0 12px; font-size: 13px; }
+.plan-paste summary { cursor: pointer; color: var(--muted); }
+.plan-paste textarea { display: block; width: 100%; margin: 8px 0; padding: 8px; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); background: var(--surface); font: 12px/1.4 ui-monospace, monospace; resize: vertical; }
+.plan-paste .outline-button { margin-top: 0; }
 .laps-panel { margin-top: 18px; }
 .laps-scroll { max-height: 280px; margin-top: 8px; overflow: auto; border-radius: 10px; box-shadow: 0 0 0 1px var(--line) inset; }
 .laps-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -283,7 +309,7 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 700; letter-spac
 .laps-table td { padding: 7px 10px; border-top: 1px solid var(--line); color: var(--ink); text-align: right; white-space: nowrap; }
 .laps-table th:first-child, .laps-table td:first-child { color: var(--subtle); text-align: left; }
 .laps-table select { height: 28px; padding: 0 6px; border: 1px solid var(--line-strong); border-radius: 7px; color: var(--ink); background: var(--surface); font-size: 12px; }
-.laps-table tr.is-warmup td, .laps-table tr.is-cooldown td, .laps-table tr.is-rest td { color: var(--muted); }
+.laps-table tr.is-warmup td, .laps-table tr.is-cooldown td, .laps-table tr.is-rest td, .laps-table tr.is-recovery td { color: var(--muted); }
 .chart-axis { display: flex; justify-content: space-between; margin-top: 6px; color: var(--subtle); font-size: 11px; }
 
 /* Batch tabs */

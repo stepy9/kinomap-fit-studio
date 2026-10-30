@@ -5,6 +5,7 @@ import { checkWorkout } from "./checks.js";
 import { collectDirectoryFiles, fitFileName, kinomapExportKey, titleFromKinomapFileName } from "./files.js";
 import { renderBatchTabs } from "./ui/batch.js";
 import { drawChart, isTrimMode, setTrimMode, setupChartLegend, setupChartTrim } from "./ui/chart.js";
+import { intensitySelectElement, openIntervalsDialog } from "./ui/intervals.js";
 import {
   applyStaticTranslations, byId, displayNumber, elements, formatDuration, setNotice, sportLabel, state, t, timeRange, translateMessage, setZone, zone,
 } from "./ui/context.js";
@@ -23,11 +24,13 @@ function renderLapOptions(sport, selected = elements.lapPreset.value) {
   const options = [
     ...presets.map((meters) => [String(meters), meters === fallback ? t("lapDefault", { label: lapLabel(meters) }) : lapLabel(meters)]),
     ["0", t("lapNone")],
+    ["intervals", t("lapIntervals")],
     ["custom", t("lapCustomOption")],
   ];
   elements.lapPreset.replaceChildren(...options.map(([value, label]) => new Option(label, value)));
   elements.lapPreset.value = options.some(([value]) => value === selected) ? selected : String(fallback);
   elements.lapCustomField.hidden = elements.lapPreset.value !== "custom";
+  byId("editIntervalsButton").hidden = elements.lapPreset.value !== "intervals";
 }
 
 // Trimming is a mode: the toggle shows the chart handles and the start/end fields below the chart.
@@ -50,6 +53,7 @@ function renderTrimStatus() {
 // Each activity starts untrimmed, or with the trim its tab already had.
 function resetTrim(settings = {}) {
   state.lapIntensities = settings.lapIntensities ?? [];
+  state.segments = settings.segments ?? null;
   elements.trimStart.value = settings.trimStartSeconds ?? "0";
   elements.trimEnd.value = settings.trimEndSeconds ?? "0";
   showTrim(Number(elements.trimStart.value) > 0 || Number(elements.trimEnd.value) > 0);
@@ -219,6 +223,7 @@ function currentSettings() {
     sources: metricSources(),
     ...feelSettings(),
     lapIntensities: state.lapIntensities,
+    segments: state.segments,
     zoneChoice: state.zoneChoice,
     activityName: elements.activityName.value,
     manualStart: elements.manualStart.value || undefined,
@@ -236,6 +241,7 @@ function applySettings(settings) {
   setMetricSources(settings.sources);
   setFeel(settings);
   state.lapIntensities = settings.lapIntensities ?? [];
+  state.segments = settings.segments ?? null;
   state.zoneChoice = settings.zoneChoice ?? null;
   if (settings.manualStart) {
     elements.manualStart.value = settings.manualStart;
@@ -367,7 +373,7 @@ async function exportBatch(targetDirectory = null) {
     item.status = "saving";
     renderBatch();
     try {
-      const workout = buildBatchWorkout(item, { ...(item.settings ?? rememberedSettings(item.sport)), ...item.overrides });
+      const workout = buildBatchWorkout(item, { ...(item.settings ?? rememberedSettings(item.sport)), ...item.overrides, asWatch: elements.asWatch.checked });
       const { saved } = await saveFit(workout.fitBytes, fitFileName(workout.activityName, t("fallbackActivity")), targetDirectory ?? item.directoryHandle);
       counts[saved ? "saved" : "downloaded"] += 1;
       rememberExport(kinomapExportKey(item.kinomapFile.name));
@@ -520,21 +526,20 @@ function speedText(speed, sport) {
   return sport === "rowing" ? `${formatDuration(500 / speed)} /500 m` : `${formatDuration(1000 / speed)} min/km`;
 }
 
-// Lap types marked in the lap table, by lap number; Garmin shows warm-up and cool-down laps apart from the work.
-const lapIntensityOptions = [["warmup", "intensityWarmup"], ["active", "intensityActive"], ["rest", "intensityRest"], ["cooldown", "intensityCooldown"]];
-
+// Lap types marked in the lap table; by interval laps the type belongs to the segment the lap comes from.
 function intensitySelect(lap, index) {
-  const select = document.createElement("select");
-  select.setAttribute("aria-label", `${t("lapType")} ${index + 1}`);
-  select.append(...lapIntensityOptions.map(([value, key]) => new Option(t(key), value)));
-  select.value = lap.intensity;
-  select.addEventListener("change", () => {
-    const intensities = [...state.lapIntensities];
-    intensities[index] = select.value;
-    state.lapIntensities = intensities;
+  return intensitySelectElement(lap.intensity, `${t("lapType")} ${index + 1}`, (value) => {
+    const segments = state.result?.segments;
+    if (segments) {
+      const owner = [...segments].reverse().find((segment) => segment.startMs <= lap.startMs) ?? segments[0];
+      state.segments = segments.map((segment) => (segment === owner ? { ...segment, intensity: value } : { ...segment }));
+    } else {
+      const intensities = [...state.lapIntensities];
+      intensities[index] = value;
+      state.lapIntensities = intensities;
+    }
     render();
   });
-  return select;
 }
 
 // The laps written to the FIT, as Garmin Connect will list them.
@@ -546,6 +551,7 @@ function renderLaps(laps, sport) {
   const columns = [
     [t("lapColumn"), (lap, index) => String(index + 1)],
     [t("lapType"), (lap, index) => intensitySelect(lap, index)],
+    ...(state.result?.segments ? [[t("segmentTarget"), (lap) => (lap.target ? `${lap.target} ${lap.targetType === "power" ? "W" : sport === "running" ? "spm" : "rpm"}` : "—")]] : []),
     [t("lapTime"), (lap) => formatDuration(lap.timerSeconds)],
     [t("lapDistanceColumn"), (lap) => (lap.distance >= 1000 ? value(lap.distance / 1000, " km", 2) : value(lap.distance, " m"))],
     [sport === "cycling" ? t("lapSpeed") : t("lapPace"), (lap) => speedText(lap.avgSpeed, sport)],
@@ -677,10 +683,15 @@ function render() {
           sources: metricSources(),
           ...feelSettings(),
           lapIntensities: state.lapIntensities,
+          segments: state.segments,
           activityName: elements.activityName.value,
+          asWatch: elements.asWatch.checked,
         },
       );
-      elements.lapNote.textContent = state.result.lapDistance > 0 ? t("lapCount", { count: state.result.laps.length }) : "";
+      const { segments } = state.result;
+      elements.lapNote.textContent = segments
+        ? segments.length ? t("lapCount", { count: state.result.laps.length }) : t("intervalsNone")
+        : state.result.lapDistance > 0 ? t("lapCount", { count: state.result.laps.length }) : "";
       renderSummary(state.result.summary, state.result.startMs, state.result.endMs, state.result.sport);
       renderLaps(state.result.laps, state.result.sport);
       renderChecks();
@@ -755,6 +766,13 @@ elements.alignmentMode.addEventListener("change", () => {
   render();
 });
 byId("trimToggle").addEventListener("click", () => showTrim(!isTrimMode()));
+byId("editIntervalsButton").addEventListener("click", () => {
+  if (!state.result) return;
+  openIntervalsDialog(state.result, state.result.segments, (segments) => {
+    state.segments = segments;
+    render();
+  });
+});
 byId("trimReset").addEventListener("click", () => {
   elements.trimStart.value = "0";
   elements.trimEnd.value = "0";
@@ -768,6 +786,7 @@ elements.lapDistance.addEventListener("input", () => {
 });
 elements.lapPreset.addEventListener("change", () => {
   elements.lapCustomField.hidden = elements.lapPreset.value !== "custom";
+  byId("editIntervalsButton").hidden = elements.lapPreset.value !== "intervals";
   saveLapDistance();
   render();
 });
@@ -869,3 +888,12 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
     .catch(() => {});
   byId("updateReload").addEventListener("click", () => window.location.reload());
 }
+// Reporting the export as a Garmin watch is on unless turned off; the choice is remembered.
+if (savedDefaults().asWatch === false) {
+  elements.asWatch.checked = false;
+  render();
+}
+elements.asWatch.addEventListener("change", () => {
+  saveDefaults({ asWatch: elements.asWatch.checked });
+  render();
+});

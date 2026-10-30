@@ -8,7 +8,7 @@ export const elements = {
   offset: byId("offsetInput"), alignmentMode: byId("alignmentMode"), trimStart: byId("trimStart"), trimEnd: byId("trimEnd"),
   sourcesPanel: byId("sourcesPanel"),
   sources: { heartRate: byId("sourceHeartRate"), power: byId("sourcePower"), cadence: byId("sourceCadence") },
-  timeZone: byId("timeZoneSelect"), zoneBadge: byId("zoneBadge"), footerZone: byId("footerZone"),
+  timeZone: byId("timeZoneSelect"), asWatch: byId("asWatchToggle"), zoneBadge: byId("zoneBadge"), footerZone: byId("footerZone"),
   manualStartLabel: byId("manualStartLabel"),
   workoutFeel: byId("workoutFeel"), workoutRpe: byId("workoutRpe"),
   lapPreset: byId("lapPreset"), lapCustomField: byId("lapCustomField"), lapDistance: byId("lapDistance"), lapNote: byId("lapNote"),
@@ -37,6 +37,8 @@ export const state = {
   zoneChoice: null,
   // Lap types chosen in the lap table, by lap number.
   lapIntensities: [],
+  // Interval segments edited for the open activity; null lets the export estimate them.
+  segments: null,
 };
 
 // Output time zone: reads timestamps without a zone, sets the FIT local time and every displayed clock.

@@ -196,6 +196,7 @@
               <div class="field-grid">
                 <label class="field"><span data-i18n="lapDistance">Délka kola</span><select id="lapPreset"></select></label>
                 <label class="field" id="lapCustomField" hidden><span data-i18n="lapCustom">Vlastní délka · m</span><input id="lapDistance" type="number" min="1" step="50" value="500" /></label>
+                <button class="outline-button edit-intervals" id="editIntervalsButton" type="button" hidden data-i18n="editIntervals">Upravit intervaly</button>
               </div>
             </section>
 
@@ -238,6 +239,10 @@
                   <select id="timeZoneSelect"></select>
                 </label>
                 <p class="field-note" data-i18n="timeZoneNote">Platí pro všechny aktivity: místní čas ve FIT a časy v TCX/PWX, které pásmo neuvádějí.</p>
+              </section>
+              <section class="panel" aria-label="Zařízení v exportu" data-i18n-aria="asWatch">
+                <label class="check-field"><input id="asWatchToggle" type="checkbox" checked /> <span data-i18n="asWatch">Hlásit export jako hodinky Garmin</span></label>
+                <p class="field-note" data-i18n="asWatchNote">Connect pak spočítá Training Effect a tréninkovou zátěž. Bez toho se soubor hlásí jako vývojářské zařízení.</p>
               </section>
             </details>
           </aside>
@@ -295,6 +300,32 @@
           </section>
         </div>
       </section>
+      <dialog class="intervals-dialog" id="intervalsDialog" aria-labelledby="intervalsTitle">
+        <div class="dialog-head">
+          <h2 id="intervalsTitle" data-i18n="intervalsTitle">Intervaly</h2>
+          <span class="estimate-note" id="intervalsCount"></span>
+        </div>
+        <p class="field-note" data-i18n="intervalsHint">Odhad podle změn výkonu nebo kadence. Upravte začátky nebo délky úseků (min:s, šipkami po 1 s, se Shiftem po 10 s), jejich typ a cíl, nebo úseky přidejte či odeberte. Změna délky posune všechny další úseky. Každý úsek bude v Garminu samostatné kolo.</p>
+        <details class="plan-paste">
+          <summary data-i18n="pastePlan">Vložit plán z Kinomapu</summary>
+          <textarea id="planText" rows="4" placeholder="01:09  80%  24rpm  A"></textarea>
+          <button class="outline-button" id="planApply" type="button" data-i18n="pastePlanApply">Načíst plán</button>
+        </details>
+        <div class="laps-scroll">
+          <table class="laps-table intervals-table">
+            <thead><tr><th>#</th><th data-i18n="segmentStart">Začátek</th><th data-i18n="segmentDuration">Délka</th><th data-i18n="lapCadence">Kadence</th><th data-i18n="lapPower">Výkon</th><th data-i18n="segmentTarget">Cíl</th><th data-i18n="lapType">Typ</th><th></th></tr></thead>
+            <tbody id="intervalsRows"></tbody>
+          </table>
+        </div>
+        <div class="dialog-actions">
+          <button class="outline-button" id="addSegmentButton" type="button" data-i18n="addSegment">Přidat úsek</button>
+          <button class="link-button" id="redetectButton" type="button" data-i18n="redetect">Znovu odhadnout</button>
+          <label class="check-field"><input id="lockDurations" type="checkbox" /> <span data-i18n="lockDurations">Zamknout délky</span></label>
+          <span class="dialog-spacer"></span>
+          <button class="outline-button" id="intervalsCancel" type="button" data-i18n="cancel">Zrušit</button>
+          <button class="export-button" id="intervalsSave" type="button" data-i18n="save">Uložit</button>
+        </div>
+      </dialog>
       <div class="update-toast" id="updateToast" role="status" hidden>
         <span data-i18n="updateReady">Je k dispozici nová verze aplikace.</span>
         <button class="outline-button" id="updateReload" type="button" data-i18n="updateReload">Obnovit</button>

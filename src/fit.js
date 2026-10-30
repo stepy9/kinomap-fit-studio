@@ -91,7 +91,25 @@ function summaryFieldsFor(summary, startMs, endMs, sport, subSport) {
   };
 }
 
-export function encodeFit(records, summary, laps, startMs, endMs, timeZone = "Europe/Prague", activityName = "Kinomap - Rowing Workout", sport = "rowing", subSport = "indoorRowing") {
+// A FIT target as a range around the value: cadence ±1 rpm, power ±5 W.
+// Power goes in plain watts: Garmin Connect plots the value as is and ignores the spec's 1000 W offset.
+function stepTarget(step) {
+  if (!(step.target > 0) || !["cadence", "power"].includes(step.targetType)) return { targetType: "open" };
+  const value = Math.round(step.target);
+  const spread = step.targetType === "cadence" ? 1 : 5;
+  return { targetType: step.targetType, targetValue: 0, customTargetValueLow: value - spread, customTargetValueHigh: value + spread };
+}
+
+// By default exports present themselves as a Garmin watch (fenix 7 Pro Solar), so Connect works out Training Effect and training load.
+// The serial number marks the file as one of ours; older exports used the "development" manufacturer instead.
+export const exportSerialNumber = 4_200_000_001;
+const exportDevice = { manufacturer: "garmin", product: 4375, serialNumber: exportSerialNumber };
+const developmentDevice = { manufacturer: "development", product: 0, serialNumber: exportSerialNumber };
+export const isExportedFit = (fileId) => fileId?.manufacturer === "development" || fileId?.serialNumber === exportSerialNumber;
+
+// steps, when given, describe the workout behind interval laps: each step's duration, intensity and target.
+export function encodeFit(records, summary, laps, startMs, endMs, timeZone = "Europe/Prague", activityName = "Kinomap - Rowing Workout", sport = "rowing", subSport = "indoorRowing", steps = null, asWatch = true) {
+  const device = asWatch ? exportDevice : developmentDevice;
   const encoder = new Encoder();
   const startTime = fitTime(startMs);
   const endTime = fitTime(endMs);
@@ -101,10 +119,25 @@ export function encodeFit(records, summary, laps, startMs, endMs, timeZone = "Eu
   encoder.writeMesg({
     mesgNum: Profile.MesgNum.FILE_ID,
     type: "activity",
-    manufacturer: "development",
-    product: 0,
+    ...device,
     timeCreated: startTime,
   });
+  encoder.writeMesg({ mesgNum: Profile.MesgNum.FILE_CREATOR, softwareVersion: 2100 });
+  encoder.writeMesg({ mesgNum: Profile.MesgNum.DEVICE_INFO, timestamp: startTime, deviceIndex: "creator", ...device, softwareVersion: 21 });
+  // Points at the workout followed, which also lets Connect take the activity name from it.
+  encoder.writeMesg({ mesgNum: Profile.MesgNum.TRAINING_FILE, timestamp: startTime, type: "workout", ...device, timeCreated: startTime });
+  if (steps?.length) {
+    encoder.writeMesg({ mesgNum: Profile.MesgNum.WORKOUT, wktName: activityName, sport, subSport, numValidSteps: steps.length });
+    steps.forEach((step, index) => encoder.writeMesg({
+      mesgNum: Profile.MesgNum.WORKOUT_STEP,
+      messageIndex: index,
+      durationType: "time",
+      durationValue: Math.round(step.durationSeconds * 1000),
+      // Garmin Connect lists an "active" step as Other; its own workouts call the work steps "interval".
+      intensity: step.intensity === "active" ? "interval" : step.intensity,
+      ...stepTarget(step),
+    }));
+  }
   encoder.writeMesg({
     mesgNum: Profile.MesgNum.EVENT,
     timestamp: startTime,
@@ -152,7 +185,8 @@ export function encodeFit(records, summary, laps, startMs, endMs, timeZone = "Eu
       event: "lap",
       eventType: "stop",
       intensity: lap.intensity ?? "active",
-      lapTrigger: index === laps.length - 1 ? "sessionEnd" : "distance",
+      lapTrigger: index === laps.length - 1 ? "sessionEnd" : lap.trigger ?? "distance",
+      wktStepIndex: lap.stepIndex,
     });
   });
   encoder.writeMesg({

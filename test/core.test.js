@@ -3,8 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { Decoder, Stream } from "@garmin/fitsdk";
-import { buildWorkout, decodeGarminFit, estimateOffset, parseKinomap } from "../src/core.js";
+import { buildWorkout, decodeGarminFit, detectIntervals, estimateOffset, parseKinomap, parseKinomapPlan } from "../src/core.js";
 import { translations } from "../src/i18n.js";
+import { exportSerialNumber } from "../src/fit.js";
 
 const fixturesRoot = path.resolve("test", "fixtures");
 // Synthetic fixtures from scripts/generate-fixtures.mjs; the watch heart rate lags Kinomap by this offset.
@@ -76,7 +77,9 @@ for (const fixture of fixtures) {
     const workout = buildWorkout(fixtureKinomap(fixture), null, { activityName: `Kinomap - ${fixture.sport}` });
     const messages = roundTrip(workout.fitBytes);
     assert.equal(messages.fileIdMesgs.length, 1);
-    assert.equal(messages.fileIdMesgs[0].manufacturer, "development");
+    assert.equal(messages.fileIdMesgs[0].manufacturer, "garmin");
+    assert.equal(messages.fileIdMesgs[0].serialNumber, exportSerialNumber);
+    assert.equal(messages.trainingFileMesgs.length, 1);
     assert.equal(messages.recordMesgs.length, workout.records.length);
     assert.equal(messages.sessionMesgs.length, 1);
     assert.equal(messages.activityMesgs.length, 1);
@@ -435,4 +438,63 @@ test("marks laps as warm-up or cool-down in the FIT", () => {
   const workout = buildWorkout(fixtureKinomap(fixture), null, { lapIntensities: ["warmup", "", "", "cooldown"] });
   const laps = roundTrip(workout.fitBytes).lapMesgs;
   assert.deepEqual(laps.map((lap) => lap.intensity), ["warmup", "active", "active", "cooldown"]);
+});
+
+test("estimates interval segments from power and splits laps at them", () => {
+  // 2 min easy, then 1 min hard / 1 min easy three times, then 2 min easy; one sample per second with noise.
+  const levels = [[120, 100], [60, 200], [60, 100], [60, 200], [60, 100], [60, 200], [120, 100]];
+  const startMs = Date.UTC(2026, 9, 28, 7);
+  const records = [];
+  let second = 0;
+  for (const [seconds, power] of levels) {
+    for (let index = 0; index < seconds; index += 1, second += 1) {
+      records.push({ timeMs: startMs + second * 1000, distance: second * 4, power: power + ((second * 7) % 11) - 5, cadence: 22, heartRate: 140, speed: 4 });
+    }
+  }
+  const { field, segments } = detectIntervals(records);
+  assert.equal(field, "power");
+  assert.deepEqual(segments.map((segment) => segment.intensity), ["warmup", "active", "recovery", "active", "recovery", "active", "cooldown"]);
+  const expectedStarts = [0, 120, 180, 240, 300, 360, 420];
+  segments.forEach((segment, index) => assert.ok(Math.abs((segment.startMs - startMs) / 1000 - expectedStarts[index]) <= 3, `segment ${index}`));
+
+  const kinomap = { records, startMs, calories: 50, sport: "rowing", subSport: "indoorRowing", sportLabel: "Rowing" };
+  const workout = buildWorkout(kinomap, null, { lapDistanceMeters: "intervals" });
+  const laps = roundTrip(workout.fitBytes).lapMesgs;
+  assert.equal(laps.length, 7);
+  assert.deepEqual(laps.map((lap) => lap.intensity), ["warmup", "active", "recovery", "active", "recovery", "active", "cooldown"]);
+  assert.ok(Math.abs(laps[1].totalTimerTime - 60) <= 4);
+});
+
+test("writes interval targets as workout steps the laps refer to", () => {
+  const startMs = Date.UTC(2026, 9, 28, 7);
+  const records = Array.from({ length: 181 }, (_, second) => ({
+    timeMs: startMs + second * 1000, distance: second * 4, power: second < 60 || second >= 90 ? 100 : 200, cadence: second < 60 || second >= 90 ? 20 : 24, heartRate: 140, speed: 4,
+  }));
+  const kinomap = { records, startMs, calories: 20, sport: "rowing", subSport: "indoorRowing", sportLabel: "Rowing" };
+  const segments = [
+    { startMs, intensity: "warmup" },
+    { startMs: startMs + 60_000, intensity: "active", targetType: "cadence", target: 24 },
+    { startMs: startMs + 90_000, intensity: "recovery", targetType: "power", target: 100 },
+  ];
+  const messages = roundTrip(buildWorkout(kinomap, null, { lapDistanceMeters: "intervals", segments, activityName: "Kinomap - Stripes" }).fitBytes);
+  assert.equal(messages.workoutMesgs[0].wktName, "Kinomap - Stripes");
+  const steps = messages.workoutStepMesgs;
+  assert.deepEqual(steps.map((step) => step.intensity), ["warmup", "interval", "recovery"]);
+  assert.deepEqual(steps.map((step) => step.durationTime), [60, 30, 90]);
+  assert.equal(steps[0].targetType, "open");
+  assert.equal(steps[1].targetType, "cadence");
+  assert.equal(steps[1].customTargetCadenceLow, 23);
+  assert.equal(steps[1].customTargetCadenceHigh, 25);
+  assert.equal(steps[2].customTargetPowerLow, 95);
+  assert.equal(steps[2].customTargetPowerHigh, 105);
+  assert.deepEqual(messages.lapMesgs.map((lap) => lap.wktStepIndex), [0, 1, 2]);
+});
+
+test("reads a workout plan copied from Kinomap", () => {
+  const text = "time\tresistance\tvalue\ttype\n00:07\n70%\n20rpm\nA\n01:09  80%  24rpm  A\n01:41 70% 20rpm A\n02:41 80% 24rpm A\n10:21 0% 0rpm RY";
+  const segments = parseKinomapPlan(text, 1000);
+  assert.deepEqual(segments.map((segment) => segment.startMs), [8000, 70000, 102000, 162000, 622000]);
+  assert.deepEqual(segments.map((segment) => segment.intensity), ["active", "active", "active", "active", "recovery"]);
+  assert.deepEqual(segments.map((segment) => segment.target), [20, 24, 20, 24, undefined]);
+  assert.equal(segments[1].targetType, "cadence");
 });

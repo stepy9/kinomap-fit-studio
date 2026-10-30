@@ -1,6 +1,7 @@
 // Plans a folder of Kinomap recordings as separate activities, each paired with its own watch FIT when one overlaps it.
 import { defaultZoneFor } from "./zones.js";
 import { buildWorkout, decodeGarminFit, estimateOffset, parseKinomap } from "./core.js";
+import { isExportedFit } from "./fit.js";
 import { checkWorkout } from "./checks.js";
 import { kinomapExportKey, titleFromKinomapFileName } from "./files.js";
 
@@ -15,7 +16,7 @@ async function decodedFits(files) {
   const decoded = await Promise.all(files.filter((file) => /\.fit$/i.test(file.name)).map(async (file) => {
     try {
       const fit = decodeGarminFit(await file.arrayBuffer());
-      return { file, fit, folder: folderOf(file), exported: fit.fileId?.manufacturer === "development" };
+      return { file, fit, folder: folderOf(file), exported: isExportedFit(fit.fileId) };
     } catch {
       return null;
     }
@@ -97,8 +98,10 @@ export function buildBatchWorkout(item, settings = {}) {
     lapDistanceMeters: settings.lapDistanceMeters,
     sources: settings.sources,
     lapIntensities: settings.lapIntensities,
+    segments: settings.segments,
     workoutFeel: settings.workoutFeel,
     workoutRpe: settings.workoutRpe,
     activityName: settings.activityName ?? `Kinomap - ${item.title}`,
+    asWatch: settings.asWatch,
   });
 }
