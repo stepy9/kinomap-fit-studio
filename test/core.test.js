@@ -498,3 +498,20 @@ test("reads a workout plan copied from Kinomap", () => {
   assert.deepEqual(segments.map((segment) => segment.target), [20, 24, 20, 24, undefined]);
   assert.equal(segments[1].targetType, "cadence");
 });
+
+test("can write cadence targets as the watts they took", () => {
+  const startMs = Date.UTC(2026, 0, 1, 8);
+  const records = Array.from({ length: 120 }, (_, second) => ({
+    timeMs: startMs + second * 1000, distance: second * 4, power: second < 60 ? 100 : 200, cadence: second < 60 ? 20 : 25, heartRate: 140, speed: 4,
+  }));
+  const kinomap = { records, startMs, calories: 20, sport: "rowing", subSport: "indoorRowing", sportLabel: "Rowing" };
+  const segments = [
+    { startMs, intensity: "recovery", targetType: "cadence", target: 22 },
+    { startMs: startMs + 60_000, intensity: "active", targetType: "cadence", target: 25 },
+  ];
+  const options = { lapDistanceMeters: "intervals", segments };
+  const steps = roundTrip(buildWorkout(kinomap, null, { ...options, cadenceAsPower: true }).fitBytes).workoutStepMesgs;
+  assert.deepEqual(steps.map((step) => step.targetType), ["power", "power"]);
+  assert.deepEqual(steps.map((step) => step.customTargetPowerLow), [105, 195]);
+  assert.equal(roundTrip(buildWorkout(kinomap, null, options).fitBytes).workoutStepMesgs[0].targetType, "cadence");
+});

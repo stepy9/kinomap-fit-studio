@@ -8,7 +8,7 @@ export const elements = {
   offset: byId("offsetInput"), alignmentMode: byId("alignmentMode"), trimStart: byId("trimStart"), trimEnd: byId("trimEnd"),
   sourcesPanel: byId("sourcesPanel"),
   sources: { heartRate: byId("sourceHeartRate"), power: byId("sourcePower"), cadence: byId("sourceCadence") },
-  timeZone: byId("timeZoneSelect"), asWatch: byId("asWatchToggle"), zoneBadge: byId("zoneBadge"), footerZone: byId("footerZone"),
+  timeZone: byId("timeZoneSelect"), asWatch: byId("asWatchToggle"), cadenceAsPower: byId("cadenceAsPowerToggle"), zoneBadge: byId("zoneBadge"), footerZone: byId("footerZone"),
   manualStartLabel: byId("manualStartLabel"),
   workoutFeel: byId("workoutFeel"), workoutRpe: byId("workoutRpe"),
   lapPreset: byId("lapPreset"), lapCustomField: byId("lapCustomField"), lapDistance: byId("lapDistance"), lapNote: byId("lapNote"),

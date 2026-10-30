@@ -477,6 +477,17 @@ function lapsForSegments(records, segments, calories, timerSeconds, sport) {
   });
 }
 
+// Garmin Connect charts power targets but not cadence ones, so a cadence target can go out as the watts
+// it took on this trainer: the segment's average power scaled by target over average cadence.
+function cadenceTargetAsPower(records, segment, untilMs) {
+  if (segment.targetType !== "cadence" || !(segment.target > 0)) return {};
+  const inside = records.filter((record) => record.timeMs >= segment.startMs && record.timeMs < untilMs && record.power > 0 && record.cadence > 0);
+  if (!inside.length) return {};
+  const power = mean(inside.map((record) => record.power));
+  const cadence = mean(inside.map((record) => record.cadence));
+  return { targetType: "power", target: Math.round(power * segment.target / cadence) };
+}
+
 // How the workout felt, as the watch asks after a recording: feel 0–100 in steps of 25, perceived effort 1–10.
 export const defaultFeel = { workoutFeel: 50, workoutRpe: 5 };
 const feelValue = (value, fallback) => (value === undefined ? fallback : value === null || value === "" ? null : Number(value));
@@ -562,6 +573,7 @@ export function buildWorkout(kinomap, fit = null, options = {}) {
   const steps = byIntervals && segments.length
     ? [...segments].sort((a, b) => a.startMs - b.startMs).map((segment, index, list) => ({
       ...segment, durationSeconds: Math.max(1, ((list[index + 1]?.startMs ?? endMs) - Math.max(startMs, segment.startMs)) / 1000),
+      ...(options.cadenceAsPower ? cadenceTargetAsPower(records, segment, list[index + 1]?.startMs ?? endMs) : {}),
     }))
     : null;
   const fitBytes = encodeFit(records, summary, laps, startMs, endMs, timeZone, activityName, kinomap.sport, kinomap.subSport, steps, options.asWatch ?? true);

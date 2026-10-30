@@ -103,5 +103,6 @@ export function buildBatchWorkout(item, settings = {}) {
     workoutRpe: settings.workoutRpe,
     activityName: settings.activityName ?? `Kinomap - ${item.title}`,
     asWatch: settings.asWatch,
+    cadenceAsPower: settings.cadenceAsPower,
   });
 }

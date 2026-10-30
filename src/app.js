@@ -373,7 +373,7 @@ async function exportBatch(targetDirectory = null) {
     item.status = "saving";
     renderBatch();
     try {
-      const workout = buildBatchWorkout(item, { ...(item.settings ?? rememberedSettings(item.sport)), ...item.overrides, asWatch: elements.asWatch.checked });
+      const workout = buildBatchWorkout(item, { ...(item.settings ?? rememberedSettings(item.sport)), ...item.overrides, asWatch: elements.asWatch.checked, cadenceAsPower: elements.cadenceAsPower.checked });
       const { saved } = await saveFit(workout.fitBytes, fitFileName(workout.activityName, t("fallbackActivity")), targetDirectory ?? item.directoryHandle);
       counts[saved ? "saved" : "downloaded"] += 1;
       rememberExport(kinomapExportKey(item.kinomapFile.name));
@@ -686,6 +686,7 @@ function render() {
           segments: state.segments,
           activityName: elements.activityName.value,
           asWatch: elements.asWatch.checked,
+          cadenceAsPower: elements.cadenceAsPower.checked,
         },
       );
       const { segments } = state.result;
@@ -895,5 +896,15 @@ if (savedDefaults().asWatch === false) {
 }
 elements.asWatch.addEventListener("change", () => {
   saveDefaults({ asWatch: elements.asWatch.checked });
+  render();
+});
+
+// Writing cadence targets as watts is off unless turned on; the choice is remembered.
+if (savedDefaults().cadenceAsPower) {
+  elements.cadenceAsPower.checked = true;
+  render();
+}
+elements.cadenceAsPower.addEventListener("change", () => {
+  saveDefaults({ cadenceAsPower: elements.cadenceAsPower.checked });
   render();
 });
