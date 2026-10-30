@@ -182,6 +182,16 @@ export function openIntervalsDialog(workout, segments, onSave) {
     draft = detected.length ? detected : [{ startMs, intensity: "active" }];
     renderRows();
   };
+  // A plan copied from Kinomap arrives one value per line; it is shown as one step per line.
+  byId("planText").onpaste = () => setTimeout(() => {
+    const text = byId("planText");
+    const lines = [];
+    for (const token of text.value.split(/\s+/).filter(Boolean)) {
+      if (/^(?:\d+:)?\d{1,2}:\d{2}$/.test(token)) lines.push([token]);
+      else lines.at(-1)?.push(token);
+    }
+    if (lines.length) text.value = lines.map((line) => line.join("  ")).join("\n");
+  });
   byId("planApply").onclick = () => {
     // Steps past the end (or the plan's own total line) are left out.
     const planned = parseKinomapPlan(byId("planText").value, startMs).filter((segment) => segment.startMs < endMs - 1000);
